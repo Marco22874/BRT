@@ -589,7 +589,7 @@ class BRTSpedizioniApp(QMainWindow):
 
         # Logo BRT (destra)
         brt_logo = QLabel()
-        brt_path = Path(__file__).parent / "brt_logo.png"
+        brt_path = Path(__file__).parent / "Logo_BRT.svg.png"
         if brt_path.exists():
             pixmap_brt = QPixmap(str(brt_path))
             scaled_brt = pixmap_brt.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
