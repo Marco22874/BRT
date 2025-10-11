@@ -4,7 +4,7 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.3.0"
+__version__ = "2.4.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-11"
 __developer__ = "Marco De Luca"
@@ -489,6 +489,7 @@ class BRTSpedizioniApp(QMainWindow):
         """Mostra il dialog con le informazioni sull'applicazione"""
         about_text = f"""
 <div style='text-align: center;'>
+<h1 style='color: #666666; font-size: 36px; margin-bottom: 10px;'>→<br>←</h1>
 <h2>{__app_name__}</h2>
 <p><b>Versione:</b> {__version__}</p>
 <p><b>Data di rilascio:</b> {__release_date__}</p>
@@ -501,7 +502,7 @@ class BRTSpedizioniApp(QMainWindow):
         msg.setWindowTitle("Informazioni")
         msg.setTextFormat(Qt.RichText)
         msg.setText(about_text)
-        msg.setIcon(QMessageBox.Information)
+        msg.setIcon(QMessageBox.NoIcon)
         msg.setStandardButtons(QMessageBox.Ok)
 
         # Imposta icona personalizzata se disponibile
