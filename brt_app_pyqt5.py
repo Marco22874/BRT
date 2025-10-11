@@ -134,11 +134,17 @@ class UpdateChecker(QThread):
         system = platform.system()
 
         for asset in assets:
-            name = asset.get('name', '').lower()
-            if system == 'Windows' and ('windows' in name or 'win' in name) and name.endswith('.zip'):
-                return asset.get('browser_download_url', '')
-            elif system == 'Darwin' and ('macos' in name or 'mac' in name) and name.endswith('.zip'):
-                return asset.get('browser_download_url', '')
+            name = asset.get('name', '')
+            name_lower = name.lower()
+
+            if system == 'Windows':
+                # Cerca file con _win o windows nel nome
+                if ('_win' in name_lower or 'windows' in name_lower) and name_lower.endswith('.zip'):
+                    return asset.get('browser_download_url', '')
+            elif system == 'Darwin':
+                # Cerca file senza _win/windows (quindi è per macOS)
+                if name_lower.endswith('.zip') and '_win' not in name_lower and 'windows' not in name_lower:
+                    return asset.get('browser_download_url', '')
 
         return ''
 
