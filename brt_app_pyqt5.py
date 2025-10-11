@@ -4,7 +4,7 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.14.0"
+__version__ = "2.15.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-11"
 __developer__ = "Marco De Luca"
@@ -496,9 +496,16 @@ class BRTSpedizioniApp(QMainWindow):
 
         # Titolo
         title = QLabel("IMPOSTAZIONI")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 20px;")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 10px;")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
+
+        # Descrizione
+        description = QLabel("Imposta i valori di default per il numero di colli e il peso delle spedizioni")
+        description.setStyleSheet("font-size: 12px; color: #666666; margin-bottom: 20px;")
+        description.setAlignment(Qt.AlignCenter)
+        description.setWordWrap(True)
+        layout.addWidget(description)
 
         # Group box per valori di default
         defaults_group = QGroupBox("Valori di Default")
