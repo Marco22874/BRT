@@ -7,6 +7,8 @@ Versione ottimizzata per Windows con fix per numpy.bool_
 
 __version__ = "2.1.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
+__release_date__ = "2025-10-11"
+__developer__ = "Marco De Luca"
 
 import sys
 import platform

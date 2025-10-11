@@ -6,6 +6,8 @@ Converte il file LISTADDT.csv nel formato richiesto da BRT
 
 __version__ = "2.1.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
+__release_date__ = "2025-10-11"
+__developer__ = "Marco De Luca"
 
 import sys
 import platform
@@ -120,6 +122,14 @@ class BRTSpedizioniApp(QMainWindow):
         settings_action = QAction('Impostazioni', self)
         settings_action.triggered.connect(self.show_settings)
         file_menu.addAction(settings_action)
+
+        # Menu Info
+        info_menu = menubar.addMenu('Info')
+
+        # Azione Info
+        about_action = QAction('Informazioni', self)
+        about_action.triggered.connect(self.show_about_dialog)
+        info_menu.addAction(about_action)
 
     def create_main_screen(self):
         """Crea la schermata principale"""
@@ -419,6 +429,32 @@ class BRTSpedizioniApp(QMainWindow):
     def show_main_screen(self):
         """Mostra la schermata principale"""
         self.stacked_widget.setCurrentWidget(self.main_screen)
+
+    def show_about_dialog(self):
+        """Mostra il dialog con le informazioni sull'applicazione"""
+        about_text = f"""
+<div style='text-align: center;'>
+<h2>{__app_name__}</h2>
+<p><b>Versione:</b> {__version__}</p>
+<p><b>Data di rilascio:</b> {__release_date__}</p>
+<br>
+<p><b>Sviluppato da:</b> {__developer__}</p>
+</div>
+        """
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Informazioni")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(about_text)
+        msg.setIcon(QMessageBox.Information)
+        msg.setStandardButtons(QMessageBox.Ok)
+
+        # Imposta icona personalizzata se disponibile
+        icon_path = Path(__file__).parent / "igea_logo.png"
+        if icon_path.exists():
+            msg.setWindowIcon(QIcon(str(icon_path)))
+
+        msg.exec_()
 
     def save_settings_and_return(self):
         """Salva le impostazioni e torna alla schermata principale"""
