@@ -4,7 +4,7 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.5.0"
+__version__ = "2.6.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-11"
 __developer__ = "Marco De Luca"
@@ -18,6 +18,11 @@ import json
 import urllib.request
 import urllib.error
 import webbrowser
+import subprocess
+import shutil
+import os
+import time
+import zipfile
 
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QPushButton, QLineEdit,
@@ -52,17 +57,16 @@ class UpdateDownloader(QThread):
     download_complete = pyqtSignal(str)  # Path del file scaricato
     download_failed = pyqtSignal(str)  # Messaggio di errore
 
-    def __init__(self, download_url, filename):
+    def __init__(self, download_url, filename, download_path):
         super().__init__()
         self.download_url = download_url
         self.filename = filename
+        self.download_path = download_path
 
     def run(self):
         """Scarica il file"""
         try:
-            # Cartella Downloads dell'utente
-            downloads_folder = Path.home() / "Downloads"
-            file_path = downloads_folder / self.filename
+            file_path = Path(self.download_path) / self.filename
 
             # Scarica con progress
             req = urllib.request.Request(self.download_url)
@@ -671,10 +675,18 @@ class BRTSpedizioniApp(QMainWindow):
         # Determina il nome del file dall'URL
         filename = download_url.split('/')[-1]
 
+        # Percorso dove scaricare (stessa cartella dell'eseguibile)
+        if getattr(sys, 'frozen', False):
+            # Se è un eseguibile PyInstaller
+            app_dir = Path(sys.executable).parent
+        else:
+            # Se è uno script Python
+            app_dir = Path(__file__).parent
+
         # Crea dialog con progress bar
         self.download_dialog = QMessageBox(self)
         self.download_dialog.setWindowTitle("Download in corso")
-        self.download_dialog.setText(f"Download di {filename} in corso...")
+        self.download_dialog.setText(f"Download di {filename} in corso...\n\nL'applicazione verrà chiusa e aggiornata automaticamente.")
         self.download_dialog.setStandardButtons(QMessageBox.NoButton)
 
         # Aggiungi progress bar al dialog
@@ -688,7 +700,7 @@ class BRTSpedizioniApp(QMainWindow):
         layout.addWidget(self.download_progress, layout.rowCount(), 0, 1, layout.columnCount())
 
         # Avvia il downloader
-        self.downloader = UpdateDownloader(download_url, filename)
+        self.downloader = UpdateDownloader(download_url, filename, str(app_dir))
         self.downloader.download_progress.connect(self.on_download_progress)
         self.downloader.download_complete.connect(self.on_download_complete)
         self.downloader.download_failed.connect(self.on_download_failed)
@@ -702,28 +714,107 @@ class BRTSpedizioniApp(QMainWindow):
         self.download_progress.setValue(progress)
 
     def on_download_complete(self, file_path):
-        """Download completato con successo"""
+        """Download completato - installa e riavvia"""
         self.download_dialog.close()
 
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Download Completato")
-        msg.setIcon(QMessageBox.Information)
-        msg.setText(f"Download completato!\n\nIl file è stato salvato in:\n{file_path}")
+        try:
+            self.install_update(file_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Installazione",
+                f"Impossibile installare l'aggiornamento:\n\n{e}\n\nIl file è stato salvato in:\n{file_path}")
 
-        open_btn = msg.addButton("Apri Cartella", QMessageBox.AcceptRole)
-        close_btn = msg.addButton("Chiudi", QMessageBox.RejectRole)
+    def install_update(self, downloaded_file):
+        """Installa l'aggiornamento e riavvia l'applicazione"""
+        downloaded_path = Path(downloaded_file)
+        system = platform.system()
 
-        msg.exec_()
+        if getattr(sys, 'frozen', False):
+            # Eseguibile PyInstaller
+            current_exe = Path(sys.executable)
+            app_dir = current_exe.parent
+        else:
+            # Script Python (modalità sviluppo)
+            current_exe = Path(__file__)
+            app_dir = current_exe.parent
 
-        if msg.clickedButton() == open_btn:
-            # Apri la cartella Downloads
-            downloads_folder = Path.home() / "Downloads"
-            if platform.system() == 'Darwin':  # macOS
-                import subprocess
-                subprocess.run(['open', str(downloads_folder)])
-            elif platform.system() == 'Windows':
-                import subprocess
-                subprocess.run(['explorer', str(downloads_folder)])
+        if system == 'Windows':
+            # Windows: sostituisci .exe
+            self.install_windows_update(downloaded_path, current_exe, app_dir)
+        elif system == 'Darwin':
+            # macOS: estrai .zip e sostituisci .app
+            self.install_macos_update(downloaded_path, current_exe, app_dir)
+
+    def install_windows_update(self, downloaded_path, current_exe, app_dir):
+        """Installa aggiornamento su Windows"""
+        # Crea script batch per sostituire l'exe dopo la chiusura
+        update_script = app_dir / "update_brt.bat"
+
+        script_content = f"""@echo off
+timeout /t 2 /nobreak > nul
+del /F /Q "{current_exe}"
+move /Y "{downloaded_path}" "{current_exe}"
+start "" "{current_exe}"
+del "%~f0"
+"""
+
+        with open(update_script, 'w') as f:
+            f.write(script_content)
+
+        # Avvia lo script e chiudi l'applicazione
+        subprocess.Popen(['cmd', '/c', str(update_script)],
+                        creationflags=subprocess.CREATE_NO_WINDOW)
+
+        QApplication.quit()
+
+    def install_macos_update(self, downloaded_path, current_exe, app_dir):
+        """Installa aggiornamento su macOS"""
+        # Estrai il contenuto dello zip
+        extract_dir = app_dir / "temp_update"
+        extract_dir.mkdir(exist_ok=True)
+
+        with zipfile.ZipFile(downloaded_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_dir)
+
+        # Trova la nuova app nel contenuto estratto
+        new_app = None
+        for item in extract_dir.iterdir():
+            if item.suffix == '.app':
+                new_app = item
+                break
+
+        if not new_app:
+            raise Exception("File .app non trovato nell'archivio")
+
+        # Determina il percorso dell'app corrente
+        if getattr(sys, 'frozen', False):
+            # Se siamo nell'app bundle (.app/Contents/MacOS/executable)
+            current_app = current_exe.parent.parent.parent
+        else:
+            # Modalità sviluppo
+            current_app = app_dir / "brt_app_pyqt5.app"
+
+        # Crea script shell per sostituire l'app dopo la chiusura
+        update_script = app_dir / "update_brt.sh"
+
+        script_content = f"""#!/bin/bash
+sleep 2
+rm -rf "{current_app}"
+mv "{new_app}" "{current_app}"
+open "{current_app}"
+rm -rf "{extract_dir}"
+rm -f "{downloaded_path}"
+rm -f "$0"
+"""
+
+        with open(update_script, 'w') as f:
+            f.write(script_content)
+
+        os.chmod(update_script, 0o755)
+
+        # Avvia lo script e chiudi l'applicazione
+        subprocess.Popen(['/bin/bash', str(update_script)])
+
+        QApplication.quit()
 
     def on_download_failed(self, error_msg):
         """Download fallito"""

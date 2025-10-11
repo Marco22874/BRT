@@ -35,6 +35,11 @@ igea_icon.icns
 INIZIO_QUI.txt
 arrows.png
 
+# Update scripts (generated at runtime)
+update_brt.bat
+update_brt.sh
+temp_update/
+
 # Build artifacts
 *.pyc
 *.pyo
