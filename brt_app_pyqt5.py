@@ -576,7 +576,8 @@ class BRTSpedizioniApp(QMainWindow):
         igea_path = Path(__file__).parent / "igea_logo.png"
         if igea_path.exists():
             pixmap_igea = QPixmap(str(igea_path))
-            scaled_igea = pixmap_igea.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            # Scala con altezza fissa di 60px, larghezza proporzionale
+            scaled_igea = pixmap_igea.scaledToHeight(60, Qt.SmoothTransformation)
             igea_logo.setPixmap(scaled_igea)
         header_layout.addWidget(igea_logo)
 
@@ -592,7 +593,8 @@ class BRTSpedizioniApp(QMainWindow):
         brt_path = Path(__file__).parent / "Logo_BRT.svg.png"
         if brt_path.exists():
             pixmap_brt = QPixmap(str(brt_path))
-            scaled_brt = pixmap_brt.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            # Scala con altezza fissa di 60px, larghezza proporzionale
+            scaled_brt = pixmap_brt.scaledToHeight(60, Qt.SmoothTransformation)
             brt_logo.setPixmap(scaled_brt)
         header_layout.addWidget(brt_logo)
 
