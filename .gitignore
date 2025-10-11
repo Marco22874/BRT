@@ -38,3 +38,10 @@ arrows.png
 # Build artifacts
 *.pyc
 *.pyo
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+*.pytest_cache
