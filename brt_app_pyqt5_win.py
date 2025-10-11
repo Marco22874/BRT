@@ -5,6 +5,9 @@ Converte il file LISTADDT.csv nel formato richiesto da BRT
 Versione ottimizzata per Windows con fix per numpy.bool_
 """
 
+__version__ = "2.0.0"
+__app_name__ = "Gestione Spedizioni IGEA <-> BRT"
+
 import sys
 import pandas as pd
 from pathlib import Path
@@ -53,7 +56,7 @@ class BRTSpedizioniApp(QMainWindow):
     def init_ui(self):
         """Inizializza l'interfaccia utente"""
 
-        self.setWindowTitle("Gestione Spedizioni IGEA <-> BRT")
+        self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(100, 100, 900, 800)
 
         # Imposta icona applicazione (logo IGEA)

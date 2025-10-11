@@ -29,6 +29,7 @@ Thumbs.db
 
 # Project specific - exclude from repo
 brt_spedizioni_data.json
+brt_settings.json
 ESEMPIO_OUTPUT_BRT.txt
 igea_icon.icns
 INIZIO_QUI.txt

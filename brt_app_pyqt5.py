@@ -4,6 +4,9 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
+__version__ = "2.0.0"
+__app_name__ = "Gestione Spedizioni IGEA <-> BRT"
+
 import sys
 import pandas as pd
 from pathlib import Path
@@ -13,7 +16,7 @@ import json
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QPushButton, QLineEdit,
                               QTextEdit, QProgressBar, QFileDialog, QMessageBox,
-                              QGroupBox, QGridLayout)
+                              QGroupBox, QGridLayout, QStackedWidget, QMenuBar, QAction)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 
@@ -40,8 +43,16 @@ class BRTSpedizioniApp(QMainWindow):
         self.current_index = 0
         # Salva il JSON nella stessa cartella dell'applicazione
         self.save_file = Path(__file__).parent / "brt_spedizioni_data.json"
+        self.settings_file = Path(__file__).parent / "brt_settings.json"
         # Modalità navigazione saltati
         self.skip_navigation_mode = False
+
+        # Impostazioni di default
+        self.default_colli = 1
+        self.default_peso = 2
+
+        # Carica impostazioni salvate
+        self.load_settings()
 
         # Inizializza interfaccia
         self.init_ui()
@@ -52,7 +63,7 @@ class BRTSpedizioniApp(QMainWindow):
     def init_ui(self):
         """Inizializza l'interfaccia utente"""
 
-        self.setWindowTitle("Gestione Spedizioni IGEA <-> BRT")
+        self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(100, 100, 900, 800)
 
         # Imposta icona applicazione (logo IGEA)
@@ -60,15 +71,46 @@ class BRTSpedizioniApp(QMainWindow):
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
-        # Widget centrale
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
+        # Crea menu bar
+        self.create_menu_bar()
+
+        # Crea stacked widget per cambiare tra schermata principale e impostazioni
+        self.stacked_widget = QStackedWidget()
+        self.setCentralWidget(self.stacked_widget)
+
+        # Crea le due schermate
+        self.main_screen = self.create_main_screen()
+        self.settings_screen = self.create_settings_screen()
+
+        # Aggiungi le schermate allo stack
+        self.stacked_widget.addWidget(self.main_screen)
+        self.stacked_widget.addWidget(self.settings_screen)
+
+        # Mostra schermata principale
+        self.stacked_widget.setCurrentWidget(self.main_screen)
+
+    def create_menu_bar(self):
+        """Crea la barra dei menu"""
+        menubar = self.menuBar()
+
+        # Menu File
+        file_menu = menubar.addMenu('File')
+
+        # Azione Impostazioni
+        settings_action = QAction('Impostazioni', self)
+        settings_action.triggered.connect(self.show_settings)
+        file_menu.addAction(settings_action)
+
+    def create_main_screen(self):
+        """Crea la schermata principale"""
+        # Widget per la schermata principale
+        main_widget = QWidget()
 
         # Layout principale
         main_layout = QVBoxLayout()
         main_layout.setSpacing(10)  # Spazio ridotto tra elementi principali
         main_layout.setContentsMargins(10, 20, 10, 10)  # Margine superiore per distanziare i loghi dal bordo
-        central_widget.setLayout(main_layout)
+        main_widget.setLayout(main_layout)
 
         # === HEADER: Loghi ===
         header_layout = QHBoxLayout()
@@ -77,6 +119,7 @@ class BRTSpedizioniApp(QMainWindow):
         # Logo IGEA (sinistra)
         igea_logo_label = QLabel()
         igea_logo_label.setAlignment(Qt.AlignCenter)
+        icon_path = Path(__file__).parent / "igea_logo.png"
         igea_pixmap = QPixmap(str(icon_path))
         if not igea_pixmap.isNull():
             igea_logo_label.setPixmap(igea_pixmap.scaledToHeight(80, Qt.SmoothTransformation))
@@ -176,14 +219,14 @@ class BRTSpedizioniApp(QMainWindow):
 
         # N. Colli
         sped_layout.addWidget(QLabel("N. Colli:"), 0, 0)
-        self.colli_input = QLineEdit("1")
+        self.colli_input = QLineEdit(str(self.default_colli))
         self.colli_input.setMaximumWidth(100)
         self.colli_input.returnPressed.connect(lambda: self.peso_input.setFocus())
         sped_layout.addWidget(self.colli_input, 0, 1)
 
         # Peso
         sped_layout.addWidget(QLabel("Peso tot (kg):"), 1, 0)
-        self.peso_input = QLineEdit("2")
+        self.peso_input = QLineEdit(str(self.default_peso))
         self.peso_input.setMaximumWidth(100)
         self.peso_input.returnPressed.connect(self.save_and_next)
         sped_layout.addWidget(self.peso_input, 1, 1)
@@ -283,6 +326,129 @@ class BRTSpedizioniApp(QMainWindow):
         self.export_label.setStyleSheet("color: green; font-weight: bold;")
         self.export_label.setWordWrap(True)
         main_layout.addWidget(self.export_label)
+
+        return main_widget
+
+    def create_settings_screen(self):
+        """Crea la schermata impostazioni"""
+        settings_widget = QWidget()
+
+        layout = QVBoxLayout()
+        layout.setSpacing(20)
+        layout.setContentsMargins(50, 50, 50, 50)
+        settings_widget.setLayout(layout)
+
+        # Titolo
+        title = QLabel("IMPOSTAZIONI")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 20px;")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        # Group box per valori di default
+        defaults_group = QGroupBox("Valori di Default")
+        defaults_group.setStyleSheet("font-size: 14px; font-weight: bold;")
+        defaults_layout = QGridLayout()
+        defaults_layout.setSpacing(15)
+
+        # N. Colli default
+        defaults_layout.addWidget(QLabel("N. Colli di default:"), 0, 0)
+        self.settings_colli_input = QLineEdit(str(self.default_colli))
+        self.settings_colli_input.setMaximumWidth(150)
+        defaults_layout.addWidget(self.settings_colli_input, 0, 1)
+
+        # Peso default
+        defaults_layout.addWidget(QLabel("Peso di default (kg):"), 1, 0)
+        self.settings_peso_input = QLineEdit(str(self.default_peso))
+        self.settings_peso_input.setMaximumWidth(150)
+        defaults_layout.addWidget(self.settings_peso_input, 1, 1)
+
+        defaults_group.setLayout(defaults_layout)
+        layout.addWidget(defaults_group)
+
+        # Spazio
+        layout.addStretch()
+
+        # Bottoni
+        buttons_layout = QHBoxLayout()
+
+        # Bottone Torna Indietro
+        back_btn = QPushButton("← Torna Indietro")
+        back_btn.clicked.connect(self.show_main_screen)
+        back_btn.setStyleSheet("background-color: #6c757d; color: white; font-weight: bold; border: none; padding: 10px 20px; border-radius: 4px;")
+        buttons_layout.addWidget(back_btn)
+
+        buttons_layout.addStretch()
+
+        # Bottone Salva
+        save_btn = QPushButton("✓ Salva Impostazioni")
+        save_btn.clicked.connect(self.save_settings_and_return)
+        save_btn.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; border: none; padding: 10px 20px; border-radius: 4px;")
+        buttons_layout.addWidget(save_btn)
+
+        layout.addLayout(buttons_layout)
+
+        return settings_widget
+
+    def show_settings(self):
+        """Mostra la schermata impostazioni"""
+        # Aggiorna i valori negli input delle impostazioni
+        self.settings_colli_input.setText(str(self.default_colli))
+        self.settings_peso_input.setText(str(self.default_peso))
+        self.stacked_widget.setCurrentWidget(self.settings_screen)
+
+    def show_main_screen(self):
+        """Mostra la schermata principale"""
+        self.stacked_widget.setCurrentWidget(self.main_screen)
+
+    def save_settings_and_return(self):
+        """Salva le impostazioni e torna alla schermata principale"""
+        try:
+            # Valida input
+            colli = int(self.settings_colli_input.text().strip())
+            peso = float(self.settings_peso_input.text().strip().replace(',', '.'))
+
+            if colli <= 0 or peso <= 0:
+                QMessageBox.warning(self, "Attenzione",
+                    "I valori devono essere maggiori di zero")
+                return
+
+            # Salva i nuovi valori di default
+            self.default_colli = colli
+            self.default_peso = peso
+
+            # Salva su file
+            settings_data = {
+                'default_colli': self.default_colli,
+                'default_peso': self.default_peso
+            }
+
+            with open(self.settings_file, 'w') as f:
+                json.dump(settings_data, f, indent=2)
+
+            QMessageBox.information(self, "Successo",
+                "Impostazioni salvate con successo!")
+
+            # Torna alla schermata principale
+            self.show_main_screen()
+
+        except ValueError:
+            QMessageBox.warning(self, "Attenzione",
+                "Valori non validi. Inserire numeri validi.")
+
+    def load_settings(self):
+        """Carica le impostazioni salvate"""
+        if not self.settings_file.exists():
+            return
+
+        try:
+            with open(self.settings_file, 'r') as f:
+                settings_data = json.load(f)
+
+            self.default_colli = settings_data.get('default_colli', 1)
+            self.default_peso = settings_data.get('default_peso', 2)
+
+        except Exception as e:
+            print(f"Errore nel caricamento delle impostazioni: {e}")
 
     def apply_template(self, colli, peso):
         """Applica template rapido"""
@@ -437,12 +603,12 @@ class BRTSpedizioniApp(QMainWindow):
         if record['VABNCL'] and record['VABNCL'] != 'SKIP':
             self.colli_input.setText(str(record['VABNCL']))
         else:
-            self.colli_input.setText('1')
+            self.colli_input.setText(str(self.default_colli))
 
         if record['VABPKB'] and record['VABPKB'] != 'SKIP':
             self.peso_input.setText(str(record['VABPKB']))
         else:
-            self.peso_input.setText('2')
+            self.peso_input.setText(str(self.default_peso))
 
         # Aggiorna progress - conta solo record REALMENTE compilati (no vuoti, no SKIP)
         total = len(self.df_spedizioni)
