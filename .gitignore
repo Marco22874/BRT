@@ -41,6 +41,7 @@ update_brt.sh
 temp_update/
 *_old.exe
 *_old.app
+*_old/
 
 # Build artifacts
 *.pyc

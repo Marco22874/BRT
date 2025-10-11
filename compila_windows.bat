@@ -56,7 +56,7 @@ REM Verifica se l'icona .ico esiste
 if exist "igea_logo.ico" (
     echo Compilazione con icona igea_logo.ico
     pyinstaller --clean ^
-        --onefile ^
+        --onedir ^
         --windowed ^
         --name "Gestione_Spedizioni_BRT" ^
         --icon=igea_logo.ico ^
@@ -70,7 +70,7 @@ if exist "igea_logo.ico" (
 ) else (
     echo Compilazione senza icona
     pyinstaller --clean ^
-        --onefile ^
+        --onedir ^
         --windowed ^
         --name "Gestione_Spedizioni_BRT" ^
         --add-data "igea_logo.png;." ^
@@ -90,22 +90,27 @@ if %errorlevel% neq 0 (
 echo.
 
 REM Verifica che l'eseguibile sia stato creato
-if exist "dist\Gestione_Spedizioni_BRT.exe" (
+if exist "dist\Gestione_Spedizioni_BRT\Gestione_Spedizioni_BRT.exe" (
     echo [6/6] Compilazione completata con successo!
     echo.
     echo ====================================================================
     echo    COMPILAZIONE COMPLETATA
     echo ====================================================================
     echo.
-    echo L'eseguibile si trova in: dist\Gestione_Spedizioni_BRT.exe
+    echo L'applicazione si trova in: dist\Gestione_Spedizioni_BRT\
     echo.
-    echo Puoi copiare questo file ovunque e utilizzarlo senza Python.
+    echo L'eseguibile principale e': Gestione_Spedizioni_BRT.exe
+    echo.
+    echo IMPORTANTE: Devi distribuire l'intera cartella "Gestione_Spedizioni_BRT"
+    echo (non solo l'exe) perche' contiene tutte le librerie necessarie.
+    echo.
+    echo Puoi creare un archivio ZIP della cartella per la distribuzione.
     echo.
 
     REM Apri la cartella dist
     explorer dist
 ) else (
-    echo [ERRORE] Eseguibile non trovato in dist\
+    echo [ERRORE] Eseguibile non trovato in dist\Gestione_Spedizioni_BRT\
     pause
     exit /b 1
 )

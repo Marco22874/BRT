@@ -4,7 +4,7 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.8.0"
+__version__ = "2.9.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-11"
 __developer__ = "Marco De Luca"
@@ -135,9 +135,9 @@ class UpdateChecker(QThread):
 
         for asset in assets:
             name = asset.get('name', '').lower()
-            if system == 'Windows' and name.endswith('.exe'):
+            if system == 'Windows' and ('windows' in name or 'win' in name) and name.endswith('.zip'):
                 return asset.get('browser_download_url', '')
-            elif system == 'Darwin' and ('macos' in name or name.endswith('.zip')):
+            elif system == 'Darwin' and ('macos' in name or 'mac' in name) and name.endswith('.zip'):
                 return asset.get('browser_download_url', '')
 
         return ''
@@ -796,10 +796,39 @@ class BRTSpedizioniApp(QMainWindow):
 
     def install_windows_update(self, downloaded_path, current_exe, app_dir):
         """Installa aggiornamento su Windows"""
-        # Nome per il backup del vecchio exe
-        old_exe = app_dir / (current_exe.stem + "_old" + current_exe.suffix)
+        # Estrai il contenuto dello zip
+        extract_dir = app_dir / "temp_update"
+        extract_dir.mkdir(exist_ok=True)
 
-        # Crea script batch per sostituire l'exe dopo la chiusura
+        with zipfile.ZipFile(downloaded_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_dir)
+
+        # Trova la cartella dell'applicazione nel contenuto estratto
+        new_app_folder = None
+        for item in extract_dir.iterdir():
+            if item.is_dir():
+                # Verifica che contenga un exe
+                exe_files = list(item.glob("*.exe"))
+                if exe_files:
+                    new_app_folder = item
+                    break
+
+        if not new_app_folder:
+            raise Exception("Cartella applicazione non trovata nell'archivio")
+
+        # Determina la cartella dell'app corrente
+        if getattr(sys, 'frozen', False):
+            # Se siamo nell'eseguibile PyInstaller (modalità --onedir)
+            # sys.executable punta a Gestione_Spedizioni_BRT/Gestione_Spedizioni_BRT.exe
+            current_app_folder = current_exe.parent
+        else:
+            # Modalità sviluppo
+            current_app_folder = app_dir / "Gestione_Spedizioni_BRT"
+
+        # Nome per il backup
+        backup_folder = app_dir / (current_app_folder.name + "_old")
+
+        # Crea script batch per sostituire la cartella dopo la chiusura
         update_script = app_dir / "update_brt.bat"
 
         script_content = f"""@echo off
@@ -814,18 +843,20 @@ if "%ERRORLEVEL%"=="0" (
 )
 
 echo Aggiornamento in corso...
-if exist "{old_exe}" del /F /Q "{old_exe}"
-if exist "{current_exe}" ren "{current_exe}" "{old_exe.name}"
-move /Y "{downloaded_path}" "{current_exe}"
+if exist "{backup_folder}" rmdir /s /q "{backup_folder}"
+if exist "{current_app_folder}" ren "{current_app_folder}" "{backup_folder.name}"
+move /Y "{new_app_folder}" "{current_app_folder}"
 
-if exist "{current_exe}" (
+if exist "{current_app_folder}" (
     echo Avvio nuova versione...
-    start "" "{current_exe}"
+    start "" "{current_app_folder}\\{current_exe.name}"
     timeout /t 2 /nobreak > nul
-    if exist "{old_exe}" del /F /Q "{old_exe}"
+    if exist "{backup_folder}" rmdir /s /q "{backup_folder}"
+    rmdir /s /q "{extract_dir}"
+    del /F /Q "{downloaded_path}"
 ) else (
     echo Errore: ripristino versione precedente
-    if exist "{old_exe}" ren "{old_exe}" "{current_exe.name}"
+    if exist "{backup_folder}" ren "{backup_folder}" "{current_app_folder.name}"
 )
 
 del "%~f0"
