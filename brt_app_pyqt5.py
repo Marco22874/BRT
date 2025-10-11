@@ -4,7 +4,7 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.4.0"
+__version__ = "2.5.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-11"
 __developer__ = "Marco De Luca"
@@ -46,9 +46,54 @@ def get_monospace_font():
 MONOSPACE_FONT = get_monospace_font()
 
 
+class UpdateDownloader(QThread):
+    """Thread per scaricare l'aggiornamento"""
+    download_progress = pyqtSignal(int)  # Percentuale download
+    download_complete = pyqtSignal(str)  # Path del file scaricato
+    download_failed = pyqtSignal(str)  # Messaggio di errore
+
+    def __init__(self, download_url, filename):
+        super().__init__()
+        self.download_url = download_url
+        self.filename = filename
+
+    def run(self):
+        """Scarica il file"""
+        try:
+            # Cartella Downloads dell'utente
+            downloads_folder = Path.home() / "Downloads"
+            file_path = downloads_folder / self.filename
+
+            # Scarica con progress
+            req = urllib.request.Request(self.download_url)
+            req.add_header('User-Agent', 'BRT-Spedizioni-App')
+
+            with urllib.request.urlopen(req, timeout=30) as response:
+                total_size = int(response.headers.get('Content-Length', 0))
+                downloaded = 0
+                chunk_size = 8192
+
+                with open(file_path, 'wb') as f:
+                    while True:
+                        chunk = response.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+
+                        if total_size > 0:
+                            progress = int((downloaded / total_size) * 100)
+                            self.download_progress.emit(progress)
+
+            self.download_complete.emit(str(file_path))
+
+        except Exception as e:
+            self.download_failed.emit(str(e))
+
+
 class UpdateChecker(QThread):
     """Thread per controllare aggiornamenti su GitHub"""
-    update_available = pyqtSignal(str, str)  # (nuova_versione, url_release)
+    update_available = pyqtSignal(str, str, str)  # (nuova_versione, url_release, download_url)
 
     def __init__(self, current_version):
         super().__init__()
@@ -69,13 +114,29 @@ class UpdateChecker(QThread):
             latest_version = data.get('tag_name', '').lstrip('v')
             release_url = data.get('html_url', '')
 
+            # Trova il file giusto per la piattaforma corrente
+            download_url = self._get_platform_download_url(data.get('assets', []))
+
             # Confronta versioni
             if latest_version and self._is_newer_version(latest_version):
-                self.update_available.emit(latest_version, release_url)
+                self.update_available.emit(latest_version, release_url, download_url)
 
         except Exception as e:
             # Ignora errori di rete silenziosamente
             print(f"Update check failed: {e}")
+
+    def _get_platform_download_url(self, assets):
+        """Trova l'URL di download corretto per la piattaforma"""
+        system = platform.system()
+
+        for asset in assets:
+            name = asset.get('name', '').lower()
+            if system == 'Windows' and name.endswith('.exe'):
+                return asset.get('browser_download_url', '')
+            elif system == 'Darwin' and ('macos' in name or name.endswith('.zip')):
+                return asset.get('browser_download_url', '')
+
+        return ''
 
     def _is_newer_version(self, latest):
         """Confronta le versioni (formato: X.Y.Z)"""
@@ -568,7 +629,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.update_checker.update_available.connect(self.show_update_dialog)
         self.update_checker.start()
 
-    def show_update_dialog(self, new_version, release_url):
+    def show_update_dialog(self, new_version, release_url, download_url):
         """Mostra il dialog di aggiornamento disponibile"""
         msg = QMessageBox(self)
         msg.setWindowTitle("Aggiornamento Disponibile")
@@ -587,7 +648,7 @@ class BRTSpedizioniApp(QMainWindow):
         msg.setTextFormat(Qt.RichText)
 
         # Bottoni
-        download_btn = msg.addButton("Scarica Aggiornamento", QMessageBox.AcceptRole)
+        download_btn = msg.addButton("Scarica Ora", QMessageBox.AcceptRole)
         later_btn = msg.addButton("Ricordamelo dopo", QMessageBox.RejectRole)
 
         # Imposta icona personalizzata
@@ -599,7 +660,78 @@ class BRTSpedizioniApp(QMainWindow):
 
         # Se ha cliccato su Scarica
         if msg.clickedButton() == download_btn:
-            webbrowser.open(release_url)
+            if download_url:
+                self.start_download(download_url)
+            else:
+                # Fallback: apri la pagina GitHub
+                webbrowser.open(release_url)
+
+    def start_download(self, download_url):
+        """Avvia il download dell'aggiornamento"""
+        # Determina il nome del file dall'URL
+        filename = download_url.split('/')[-1]
+
+        # Crea dialog con progress bar
+        self.download_dialog = QMessageBox(self)
+        self.download_dialog.setWindowTitle("Download in corso")
+        self.download_dialog.setText(f"Download di {filename} in corso...")
+        self.download_dialog.setStandardButtons(QMessageBox.NoButton)
+
+        # Aggiungi progress bar al dialog
+        self.download_progress = QProgressBar()
+        self.download_progress.setMinimum(0)
+        self.download_progress.setMaximum(100)
+        self.download_progress.setValue(0)
+
+        # Layout custom per il dialog
+        layout = self.download_dialog.layout()
+        layout.addWidget(self.download_progress, layout.rowCount(), 0, 1, layout.columnCount())
+
+        # Avvia il downloader
+        self.downloader = UpdateDownloader(download_url, filename)
+        self.downloader.download_progress.connect(self.on_download_progress)
+        self.downloader.download_complete.connect(self.on_download_complete)
+        self.downloader.download_failed.connect(self.on_download_failed)
+        self.downloader.start()
+
+        # Mostra il dialog
+        self.download_dialog.show()
+
+    def on_download_progress(self, progress):
+        """Aggiorna la progress bar del download"""
+        self.download_progress.setValue(progress)
+
+    def on_download_complete(self, file_path):
+        """Download completato con successo"""
+        self.download_dialog.close()
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Download Completato")
+        msg.setIcon(QMessageBox.Information)
+        msg.setText(f"Download completato!\n\nIl file è stato salvato in:\n{file_path}")
+
+        open_btn = msg.addButton("Apri Cartella", QMessageBox.AcceptRole)
+        close_btn = msg.addButton("Chiudi", QMessageBox.RejectRole)
+
+        msg.exec_()
+
+        if msg.clickedButton() == open_btn:
+            # Apri la cartella Downloads
+            downloads_folder = Path.home() / "Downloads"
+            if platform.system() == 'Darwin':  # macOS
+                import subprocess
+                subprocess.run(['open', str(downloads_folder)])
+            elif platform.system() == 'Windows':
+                import subprocess
+                subprocess.run(['explorer', str(downloads_folder)])
+
+    def on_download_failed(self, error_msg):
+        """Download fallito"""
+        self.download_dialog.close()
+
+        QMessageBox.critical(self, "Errore Download",
+            f"Impossibile scaricare l'aggiornamento:\n\n{error_msg}")
+
 
     def apply_template(self, colli, peso):
         """Applica template rapido"""
