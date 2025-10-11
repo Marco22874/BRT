@@ -4,10 +4,11 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 
 import sys
+import platform
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
@@ -19,6 +20,25 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QGroupBox, QGridLayout, QStackedWidget, QMenuBar, QAction)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap, QIcon
+
+
+def get_monospace_font():
+    """
+    Restituisce il font monospaced appropriato in base al sistema operativo
+    per evitare warning su font mancanti
+    """
+    system = platform.system()
+
+    if system == "Windows":
+        return "Courier New"
+    elif system == "Darwin":  # macOS
+        return "Monaco"
+    else:  # Linux e altri
+        return "Monospace"
+
+
+# Cache del font monospaced per uso globale
+MONOSPACE_FONT = get_monospace_font()
 
 
 class BRTSpedizioniApp(QMainWindow):
@@ -198,7 +218,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.dest_text.setReadOnly(True)
         self.dest_text.setFixedHeight(150)
         self.dest_text.setStyleSheet("background-color: #f0f0f0; color: #000000;")
-        font = QFont("Courier", 10)
+        font = QFont(get_monospace_font(), 10)
         self.dest_text.setFont(font)
         dest_layout.addWidget(self.dest_text)
 
@@ -569,7 +589,7 @@ class BRTSpedizioniApp(QMainWindow):
 
         # Aggiorna dati destinatario (usa HTML per formattazione con sfondo colorato)
         dest_info = (
-            f"<div style='font-family: Courier; font-size: 10pt;'>"
+            f"<div style='font-family: {MONOSPACE_FONT}; font-size: 10pt;'>"
             f"N. Spedizione: {record['VABNSP']}<br>"
             f"Destinatario:  {record['VABRSD']}<br>"
             f"Indirizzo:     {record['VABIND']}<br>"
@@ -612,8 +632,8 @@ class BRTSpedizioniApp(QMainWindow):
 
         # Aggiorna progress - conta solo record REALMENTE compilati (no vuoti, no SKIP)
         total = len(self.df_spedizioni)
-        completed = ((self.df_spedizioni['VABNCL'] != '') &
-                     (self.df_spedizioni['VABNCL'] != 'SKIP')).sum()
+        completed = int(((self.df_spedizioni['VABNCL'] != '') &
+                         (self.df_spedizioni['VABNCL'] != 'SKIP')).sum())
         progress_pct = int((completed / total) * 100) if total > 0 else 0
 
         self.progress_label.setText(f"Cliente {self.current_index + 1}/{total} ({progress_pct}%)")
@@ -621,7 +641,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.progress_bar.setValue(completed)
 
         # Aggiorna riepilogo
-        skipped = (self.df_spedizioni['VABNCL'] == 'SKIP').sum()
+        skipped = int((self.df_spedizioni['VABNCL'] == 'SKIP').sum())
         empty = total - completed - skipped
 
         if empty == 0 and skipped == 0:
@@ -651,9 +671,9 @@ class BRTSpedizioniApp(QMainWindow):
         current_is_saved = current_record['VABNCL'] != ''
 
         # Verifica se tutti i record sono stati completati (NO vuoti, NO SKIP)
-        empty_records = (self.df_spedizioni['VABNCL'] == '').sum()
-        skipped_records = (self.df_spedizioni['VABNCL'] == 'SKIP').sum()
-        all_completed = (empty_records == 0) and (skipped_records == 0)
+        empty_records = int((self.df_spedizioni['VABNCL'] == '').sum())
+        skipped_records = int((self.df_spedizioni['VABNCL'] == 'SKIP').sum())
+        all_completed = bool((empty_records == 0) and (skipped_records == 0))
 
         # Bottone Precedente: disabilita se siamo al primo
         self.prev_btn.setEnabled(self.current_index > 0)

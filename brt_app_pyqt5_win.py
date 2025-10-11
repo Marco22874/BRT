@@ -5,10 +5,11 @@ Converte il file LISTADDT.csv nel formato richiesto da BRT
 Versione ottimizzata per Windows con fix per numpy.bool_
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 
 import sys
+import platform
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
@@ -20,6 +21,25 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QGroupBox, QGridLayout)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap, QIcon
+
+
+def get_monospace_font():
+    """
+    Restituisce il font monospaced appropriato in base al sistema operativo
+    per evitare warning su font mancanti
+    """
+    system = platform.system()
+
+    if system == "Windows":
+        return "Courier New"
+    elif system == "Darwin":  # macOS
+        return "Monaco"
+    else:  # Linux e altri
+        return "Monospace"
+
+
+# Cache del font monospaced per uso globale
+MONOSPACE_FONT = get_monospace_font()
 
 
 class BRTSpedizioniApp(QMainWindow):
