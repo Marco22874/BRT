@@ -4,7 +4,7 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.7.0"
+__version__ = "2.8.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-11"
 __developer__ = "Marco De Luca"
@@ -796,14 +796,38 @@ class BRTSpedizioniApp(QMainWindow):
 
     def install_windows_update(self, downloaded_path, current_exe, app_dir):
         """Installa aggiornamento su Windows"""
+        # Nome per il backup del vecchio exe
+        old_exe = app_dir / (current_exe.stem + "_old" + current_exe.suffix)
+
         # Crea script batch per sostituire l'exe dopo la chiusura
         update_script = app_dir / "update_brt.bat"
 
         script_content = f"""@echo off
-timeout /t 2 /nobreak > nul
-del /F /Q "{current_exe}"
+echo Attendere chiusura applicazione...
+timeout /t 3 /nobreak > nul
+
+:retry
+tasklist /FI "IMAGENAME eq {current_exe.name}" 2>NUL | find /I /N "{current_exe.name}">NUL
+if "%ERRORLEVEL%"=="0" (
+    timeout /t 1 /nobreak > nul
+    goto retry
+)
+
+echo Aggiornamento in corso...
+if exist "{old_exe}" del /F /Q "{old_exe}"
+if exist "{current_exe}" ren "{current_exe}" "{old_exe.name}"
 move /Y "{downloaded_path}" "{current_exe}"
-start "" "{current_exe}"
+
+if exist "{current_exe}" (
+    echo Avvio nuova versione...
+    start "" "{current_exe}"
+    timeout /t 2 /nobreak > nul
+    if exist "{old_exe}" del /F /Q "{old_exe}"
+) else (
+    echo Errore: ripristino versione precedente
+    if exist "{old_exe}" ren "{old_exe}" "{current_exe.name}"
+)
+
 del "%~f0"
 """
 

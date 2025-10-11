@@ -39,6 +39,8 @@ arrows.png
 update_brt.bat
 update_brt.sh
 temp_update/
+*_old.exe
+*_old.app
 
 # Build artifacts
 *.pyc
