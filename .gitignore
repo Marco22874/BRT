@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+
+# Build directories
+build/
+dist/
+
+# PyInstaller
+*.spec
+Gestione_Spedizioni_BRT.spec
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific - exclude from repo
+brt_spedizioni_data.json
+ESEMPIO_OUTPUT_BRT.txt
+igea_icon.icns
+INIZIO_QUI.txt
+arrows.png
+
+# Build artifacts
+*.pyc
+*.pyo
