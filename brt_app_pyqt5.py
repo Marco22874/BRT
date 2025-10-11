@@ -4,7 +4,7 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-11"
 __developer__ = "Marco De Luca"
@@ -15,12 +15,15 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime
 import json
+import urllib.request
+import urllib.error
+import webbrowser
 
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QPushButton, QLineEdit,
                               QTextEdit, QProgressBar, QFileDialog, QMessageBox,
                               QGroupBox, QGridLayout, QStackedWidget, QMenuBar, QAction)
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 
 
@@ -41,6 +44,55 @@ def get_monospace_font():
 
 # Cache del font monospaced per uso globale
 MONOSPACE_FONT = get_monospace_font()
+
+
+class UpdateChecker(QThread):
+    """Thread per controllare aggiornamenti su GitHub"""
+    update_available = pyqtSignal(str, str)  # (nuova_versione, url_release)
+
+    def __init__(self, current_version):
+        super().__init__()
+        self.current_version = current_version
+        self.github_repo = "Marco22874/BRT"
+
+    def run(self):
+        """Controlla se c'è una nuova versione su GitHub"""
+        try:
+            # Chiamata API GitHub per ottenere l'ultima release
+            url = f"https://api.github.com/repos/{self.github_repo}/releases/latest"
+            req = urllib.request.Request(url)
+            req.add_header('User-Agent', 'BRT-Spedizioni-App')
+
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode())
+
+            latest_version = data.get('tag_name', '').lstrip('v')
+            release_url = data.get('html_url', '')
+
+            # Confronta versioni
+            if latest_version and self._is_newer_version(latest_version):
+                self.update_available.emit(latest_version, release_url)
+
+        except Exception as e:
+            # Ignora errori di rete silenziosamente
+            print(f"Update check failed: {e}")
+
+    def _is_newer_version(self, latest):
+        """Confronta le versioni (formato: X.Y.Z)"""
+        try:
+            current_parts = [int(x) for x in self.current_version.split('.')]
+            latest_parts = [int(x) for x in latest.split('.')]
+
+            # Confronta major, minor, patch
+            for curr, lat in zip(current_parts, latest_parts):
+                if lat > curr:
+                    return True
+                elif lat < curr:
+                    return False
+
+            return False
+        except:
+            return False
 
 
 class BRTSpedizioniApp(QMainWindow):
@@ -81,6 +133,9 @@ class BRTSpedizioniApp(QMainWindow):
 
         # Carica dati salvati se esistono
         self.load_saved_data()
+
+        # Avvia check aggiornamenti (in background)
+        self.check_for_updates()
 
     def init_ui(self):
         """Inizializza l'interfaccia utente"""
@@ -505,6 +560,45 @@ class BRTSpedizioniApp(QMainWindow):
 
         except Exception as e:
             print(f"Errore nel caricamento delle impostazioni: {e}")
+
+    def check_for_updates(self):
+        """Avvia il controllo aggiornamenti in background"""
+        self.update_checker = UpdateChecker(__version__)
+        self.update_checker.update_available.connect(self.show_update_dialog)
+        self.update_checker.start()
+
+    def show_update_dialog(self, new_version, release_url):
+        """Mostra il dialog di aggiornamento disponibile"""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Aggiornamento Disponibile")
+        msg.setIcon(QMessageBox.Information)
+
+        text = f"""
+<div style='text-align: center;'>
+<h3>Nuova versione disponibile!</h3>
+<p>È disponibile la versione <b>{new_version}</b></p>
+<p>Versione attuale: <b>{__version__}</b></p>
+<br>
+<p>Vuoi scaricare l'aggiornamento?</p>
+</div>
+        """
+        msg.setText(text)
+        msg.setTextFormat(Qt.RichText)
+
+        # Bottoni
+        download_btn = msg.addButton("Scarica Aggiornamento", QMessageBox.AcceptRole)
+        later_btn = msg.addButton("Ricordamelo dopo", QMessageBox.RejectRole)
+
+        # Imposta icona personalizzata
+        icon_path = Path(__file__).parent / "igea_logo.png"
+        if icon_path.exists():
+            msg.setWindowIcon(QIcon(str(icon_path)))
+
+        msg.exec_()
+
+        # Se ha cliccato su Scarica
+        if msg.clickedButton() == download_btn:
+            webbrowser.open(release_url)
 
     def apply_template(self, colli, peso):
         """Applica template rapido"""
