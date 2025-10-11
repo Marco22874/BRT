@@ -4,7 +4,7 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.6.0"
+__version__ = "2.7.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-11"
 __developer__ = "Marco De Luca"
@@ -27,7 +27,7 @@ import zipfile
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QPushButton, QLineEdit,
                               QTextEdit, QProgressBar, QFileDialog, QMessageBox,
-                              QGroupBox, QGridLayout, QStackedWidget, QMenuBar, QAction)
+                              QGroupBox, QGridLayout, QStackedWidget, QMenuBar, QAction, QDialog)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 
@@ -552,9 +552,49 @@ class BRTSpedizioniApp(QMainWindow):
 
     def show_about_dialog(self):
         """Mostra il dialog con le informazioni sull'applicazione"""
-        about_text = f"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Informazioni")
+        dialog.setMinimumWidth(500)
+
+        # Layout principale
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(30, 30, 30, 30)
+
+        # Header con loghi e frecce
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(20)
+
+        # Logo IGEA (sinistra)
+        igea_logo = QLabel()
+        igea_path = Path(__file__).parent / "igea_logo.png"
+        if igea_path.exists():
+            pixmap_igea = QPixmap(str(igea_path))
+            scaled_igea = pixmap_igea.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            igea_logo.setPixmap(scaled_igea)
+        header_layout.addWidget(igea_logo)
+
+        # Frecce al centro
+        arrows_label = QLabel("→\n←")
+        arrows_label.setFont(QFont("Arial", 32))
+        arrows_label.setAlignment(Qt.AlignCenter)
+        arrows_label.setStyleSheet("color: #666666;")
+        header_layout.addWidget(arrows_label)
+
+        # Logo BRT (destra)
+        brt_logo = QLabel()
+        brt_path = Path(__file__).parent / "brt_logo.png"
+        if brt_path.exists():
+            pixmap_brt = QPixmap(str(brt_path))
+            scaled_brt = pixmap_brt.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            brt_logo.setPixmap(scaled_brt)
+        header_layout.addWidget(brt_logo)
+
+        main_layout.addLayout(header_layout)
+
+        # Informazioni app
+        info_text = f"""
 <div style='text-align: center;'>
-<h1 style='color: #666666; font-size: 36px; margin-bottom: 10px;'>→<br>←</h1>
 <h2>{__app_name__}</h2>
 <p><b>Versione:</b> {__version__}</p>
 <p><b>Data di rilascio:</b> {__release_date__}</p>
@@ -563,19 +603,29 @@ class BRTSpedizioniApp(QMainWindow):
 </div>
         """
 
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Informazioni")
-        msg.setTextFormat(Qt.RichText)
-        msg.setText(about_text)
-        msg.setIcon(QMessageBox.NoIcon)
-        msg.setStandardButtons(QMessageBox.Ok)
+        info_label = QLabel(info_text)
+        info_label.setTextFormat(Qt.RichText)
+        info_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(info_label)
 
-        # Imposta icona personalizzata se disponibile
-        icon_path = Path(__file__).parent / "igea_logo.png"
-        if icon_path.exists():
-            msg.setWindowIcon(QIcon(str(icon_path)))
+        # Bottone OK
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(dialog.accept)
+        ok_button.setMinimumWidth(100)
 
-        msg.exec_()
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(ok_button)
+        button_layout.addStretch()
+        main_layout.addLayout(button_layout)
+
+        dialog.setLayout(main_layout)
+
+        # Imposta icona finestra se disponibile
+        if igea_path.exists():
+            dialog.setWindowIcon(QIcon(str(igea_path)))
+
+        dialog.exec_()
 
     def save_settings_and_return(self):
         """Salva le impostazioni e torna alla schermata principale"""
