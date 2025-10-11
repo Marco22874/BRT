@@ -4,7 +4,7 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.10.0"
+__version__ = "2.11.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-11"
 __developer__ = "Marco De Luca"
@@ -731,10 +731,12 @@ class BRTSpedizioniApp(QMainWindow):
         # Determina il nome del file dall'URL
         filename = download_url.split('/')[-1]
 
-        # Percorso dove scaricare (stessa cartella dell'eseguibile)
+        # Percorso dove scaricare (cartella parent dell'app per evitare conflitti)
         if getattr(sys, 'frozen', False):
-            # Se è un eseguibile PyInstaller
-            app_dir = Path(sys.executable).parent
+            # Se è un eseguibile PyInstaller (--onedir su Windows)
+            # sys.executable = Desktop/Gestione_Spedizioni_BRT/Gestione_Spedizioni_BRT.exe
+            # Dobbiamo scaricare nel Desktop (parent della cartella app)
+            app_dir = Path(sys.executable).parent.parent
         else:
             # Se è uno script Python
             app_dir = Path(__file__).parent
@@ -802,8 +804,19 @@ class BRTSpedizioniApp(QMainWindow):
 
     def install_windows_update(self, downloaded_path, current_exe, app_dir):
         """Installa aggiornamento su Windows"""
-        # Estrai il contenuto dello zip
-        extract_dir = app_dir / "temp_update"
+        # Determina la cartella dell'app corrente e la parent
+        if getattr(sys, 'frozen', False):
+            # Se siamo nell'eseguibile PyInstaller (modalità --onedir)
+            # sys.executable punta a Gestione_Spedizioni_BRT/Gestione_Spedizioni_BRT.exe
+            current_app_folder = current_exe.parent
+            parent_dir = current_app_folder.parent
+        else:
+            # Modalità sviluppo
+            current_app_folder = app_dir / "Gestione_Spedizioni_BRT"
+            parent_dir = app_dir
+
+        # Estrai il contenuto dello zip nella cartella parent
+        extract_dir = parent_dir / "temp_update"
         extract_dir.mkdir(exist_ok=True)
 
         with zipfile.ZipFile(downloaded_path, 'r') as zip_ref:
@@ -822,20 +835,11 @@ class BRTSpedizioniApp(QMainWindow):
         if not new_app_folder:
             raise Exception("Cartella applicazione non trovata nell'archivio")
 
-        # Determina la cartella dell'app corrente
-        if getattr(sys, 'frozen', False):
-            # Se siamo nell'eseguibile PyInstaller (modalità --onedir)
-            # sys.executable punta a Gestione_Spedizioni_BRT/Gestione_Spedizioni_BRT.exe
-            current_app_folder = current_exe.parent
-        else:
-            # Modalità sviluppo
-            current_app_folder = app_dir / "Gestione_Spedizioni_BRT"
-
         # Nome per il backup
-        backup_folder = app_dir / (current_app_folder.name + "_old")
+        backup_folder = parent_dir / (current_app_folder.name + "_old")
 
         # Crea script batch per sostituire la cartella dopo la chiusura
-        update_script = app_dir / "update_brt.bat"
+        update_script = parent_dir / "update_brt.bat"
 
         script_content = f"""@echo off
 echo Attendere chiusura applicazione...
