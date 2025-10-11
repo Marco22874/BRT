@@ -4,7 +4,7 @@ Applicazione per Gestione Spedizioni BRT - PyQt5
 Converte il file LISTADDT.csv nel formato richiesto da BRT
 """
 
-__version__ = "2.13.0"
+__version__ = "2.14.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-11"
 __developer__ = "Marco De Luca"
@@ -857,33 +857,31 @@ if "%ERRORLEVEL%"=="0" (
 
 echo Aggiornamento in corso...
 
-REM Elimina vecchio backup se esiste
-if exist "{backup_folder}" rmdir /s /q "{backup_folder}"
-
-REM Rinomina cartella corrente in backup
+REM 1. Elimina la vecchia cartella completamente
 if exist "{current_app_folder}" (
-    ren "{current_app_folder}" "{backup_folder.name}"
+    echo Eliminazione vecchia versione...
+    rmdir /s /q "{current_app_folder}"
 )
 
-REM Sposta nuova cartella al posto giusto
-REM Usa robocopy per evitare problemi con move
-robocopy "{new_app_folder}" "{current_app_folder}" /E /MOVE /NFL /NDL /NJH /NJS
+REM 2. Copia la nuova cartella dalla temp alla posizione corretta
+echo Installazione nuova versione...
+xcopy "{new_app_folder}" "{current_app_folder}" /E /I /Q /Y
 
-REM Verifica successo
+REM 3. Verifica che l'exe esista
 if exist "{current_app_folder}\\{current_exe.name}" (
     echo Avvio nuova versione...
     start "" "{current_app_folder}\\{current_exe.name}"
     timeout /t 2 /nobreak > nul
 
-    REM Cleanup
-    if exist "{backup_folder}" rmdir /s /q "{backup_folder}"
+    REM 4. Cleanup: elimina temp e zip
+    echo Pulizia file temporanei...
     if exist "{extract_dir}" rmdir /s /q "{extract_dir}"
     if exist "{downloaded_path}" del /F /Q "{downloaded_path}"
+
+    echo Aggiornamento completato!
 ) else (
-    echo Errore: ripristino versione precedente
-    if exist "{backup_folder}" (
-        ren "{backup_folder}" "{current_app_folder.name}"
-    )
+    echo ERRORE: Aggiornamento fallito!
+    pause
 )
 
 del "%~f0"
