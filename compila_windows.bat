@@ -64,7 +64,7 @@ if exist "igea_logo.ico" (
         --add-data "Logo_BRT.svg.png;." ^
         --hidden-import=PyQt5.sip ^
         --collect-all PyQt5 ^
-        brt_app_pyqt5_win.py
+        brt_app_pyqt5.py
 ) else (
     echo Compilazione senza icona
     pyinstaller --clean ^
@@ -75,7 +75,7 @@ if exist "igea_logo.ico" (
         --add-data "Logo_BRT.svg.png;." ^
         --hidden-import=PyQt5.sip ^
         --collect-all PyQt5 ^
-        brt_app_pyqt5_win.py
+        brt_app_pyqt5.py
 )
 
 if %errorlevel% neq 0 (
