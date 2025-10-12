@@ -13,27 +13,25 @@ import os
 import zipfile
 from typing import Optional, Dict, Any, Tuple
 
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                              QLabel, QPushButton, QLineEdit, QTextEdit,
-                              QProgressBar, QFileDialog, QMessageBox, QGroupBox,
-                              QGridLayout, QStackedWidget, QMenuBar, QMenu, QAction,
-                              QApplication)
+from PyQt5.QtWidgets import (QMainWindow, QStackedWidget, QAction,
+                              QApplication, QMessageBox)
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QPixmap, QIcon
+from PyQt5.QtGui import QIcon
 
 from core.constants import (UIConstants, Colors, RecordStatus, FileSettings,
                             BRTDefaults, CSVColumns, Messages)
-from core.utils import get_monospace_font, MONOSPACE_FONT, logger
+from core.utils import MONOSPACE_FONT, logger
 from core.models import validate_shipment_input
 from services.updater import UpdateDownloader, UpdateChecker
 from .dialogs import DownloadDialog, AboutDialog
 from .components.settings_manager import SettingsManager
 from .components.csv_handler import CsvHandler
 from .components.navigation_handler import NavigationHandler
+from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "3.9.0"
+__version__ = "4.0.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-12"
 __developer__ = "Marco De Luca"
@@ -71,6 +69,9 @@ class BRTSpedizioniApp(QMainWindow):
 
         # Initialize navigation handler
         self.navigation_handler = NavigationHandler(self)
+
+        # Initialize UI builder
+        self.ui_builder = UIBuilder(Path(__file__).parent.parent)
 
         # Default settings
         self.default_colli: int = 1
@@ -120,9 +121,34 @@ class BRTSpedizioniApp(QMainWindow):
         self.stacked_widget = QStackedWidget()
         self.setCentralWidget(self.stacked_widget)
 
-        # Create the two screens
-        self.main_screen = self._create_main_screen()
-        self.settings_screen = self._create_settings_screen()
+        # Create the two screens using UI builder
+        self.main_screen, main_widgets = self._create_main_screen_with_builder()
+        self.settings_screen, settings_inputs = self._create_settings_screen_with_builder()
+
+        # Assign widget references
+        self.file_label = main_widgets['file_label']
+        self.info_label = main_widgets['info_label']
+        self.dest_text = main_widgets['dest_text']
+        self.colli_input = main_widgets['colli_input']
+        self.peso_input = main_widgets['peso_input']
+        self.progress_label = main_widgets['progress_label']
+        self.progress_bar = main_widgets['progress_bar']
+        self.summary_label = main_widgets['summary_label']
+        self.prev_btn = main_widgets['prev_btn']
+        self.skip_btn = main_widgets['skip_btn']
+        self.goto_skipped_btn = main_widgets['goto_skipped_btn']
+        self.save_next_btn = main_widgets['save_next_btn']
+        self.export_btn = main_widgets['export_btn']
+        self.export_label = main_widgets['export_label']
+
+        # Assign settings input references
+        self.settings_colli_input = settings_inputs['settings_colli_input']
+        self.settings_peso_input = settings_inputs['settings_peso_input']
+        self.settings_customer_code_input = settings_inputs['settings_customer_code_input']
+        self.settings_alphabetic_ref_input = settings_inputs['settings_alphabetic_ref_input']
+        self.settings_goods_type_input = settings_inputs['settings_goods_type_input']
+        self.settings_tariff_code_input = settings_inputs['settings_tariff_code_input']
+        self.settings_service_type_input = settings_inputs['settings_service_type_input']
 
         # Add screens to stack
         self.stacked_widget.addWidget(self.main_screen)
@@ -130,6 +156,58 @@ class BRTSpedizioniApp(QMainWindow):
 
         # Show main screen
         self.stacked_widget.setCurrentWidget(self.main_screen)
+
+    def _create_main_screen_with_builder(self) -> tuple:
+        """Create main screen using UI builder.
+
+        Returns:
+            Tuple of (widget, dict of widget references)
+        """
+        callbacks = {
+            'load_csv': self.load_csv,
+            'peso_focus': lambda: self.peso_input.setFocus(),
+            'save_and_next': self.save_and_next,
+            'template': self.apply_template,
+            'previous': self.previous_item,
+            'skip': self.skip_item,
+            'goto_skipped': self.goto_next_skipped,
+            'save_and_next_unified': self.save_and_next_unified,
+            'export_csv': self.export_brt_csv
+        }
+
+        return self.ui_builder.create_main_screen(
+            self._get_button_style,
+            self.default_colli,
+            self.default_peso,
+            callbacks
+        )
+
+    def _create_settings_screen_with_builder(self) -> tuple:
+        """Create settings screen using UI builder.
+
+        Returns:
+            Tuple of (widget, dict of input references)
+        """
+        brt_config = {
+            'brt_customer_code': self.brt_customer_code,
+            'brt_alphabetic_ref': self.brt_alphabetic_ref,
+            'brt_goods_type': self.brt_goods_type,
+            'brt_tariff_code': self.brt_tariff_code,
+            'brt_service_type': self.brt_service_type
+        }
+
+        callbacks = {
+            'back': self.show_main_screen,
+            'save': self.save_settings_and_return
+        }
+
+        return self.ui_builder.create_settings_screen(
+            self._get_button_style,
+            self.default_colli,
+            self.default_peso,
+            brt_config,
+            callbacks
+        )
 
     def _create_menu_bar(self) -> None:
         """Create the menu bar"""
@@ -156,389 +234,6 @@ class BRTSpedizioniApp(QMainWindow):
         about_action = QAction('Informazioni', self)
         about_action.triggered.connect(self.show_about_dialog)
         info_menu.addAction(about_action)
-
-    def _create_header_logos(self) -> QHBoxLayout:
-        """Create the header with IGEA and BRT logos.
-
-        Returns:
-            QHBoxLayout: Layout containing logos and arrows
-        """
-        header_layout = QHBoxLayout()
-        header_layout.setAlignment(Qt.AlignCenter)
-
-        # IGEA logo (left)
-        igea_logo_label = QLabel()
-        igea_logo_label.setAlignment(Qt.AlignCenter)
-        igea_logo_path = Path(__file__).parent.parent / FileSettings.LOGO_IGEA
-        igea_pixmap = QPixmap(str(igea_logo_path))
-        if not igea_pixmap.isNull():
-            igea_logo_label.setPixmap(igea_pixmap.scaledToHeight(UIConstants.LOGO_HEIGHT, Qt.SmoothTransformation))
-        header_layout.addWidget(igea_logo_label)
-
-        # Center arrows (HTML to control line-height)
-        arrows_label = QLabel('<div style="line-height: 80%;">→<br>←</div>')
-        arrows_label.setAlignment(Qt.AlignCenter)
-        arrows_font = QFont()
-        arrows_font.setPointSize(24)
-        arrows_font.setBold(True)
-        arrows_label.setFont(arrows_font)
-        arrows_label.setStyleSheet("color: #666666; padding: 0px 20px;")
-        header_layout.addWidget(arrows_label)
-
-        # BRT logo (right)
-        brt_logo_label = QLabel()
-        brt_logo_label.setAlignment(Qt.AlignCenter)
-        brt_logo_path = Path(__file__).parent.parent / FileSettings.LOGO_BRT
-        if brt_logo_path.exists():
-            brt_pixmap = QPixmap(str(brt_logo_path))
-            if not brt_pixmap.isNull():
-                brt_logo_label.setPixmap(brt_pixmap.scaledToHeight(UIConstants.LOGO_HEIGHT, Qt.SmoothTransformation))
-        header_layout.addWidget(brt_logo_label)
-
-        return header_layout
-
-    def _create_step1_file_loading(self, main_layout: QVBoxLayout) -> None:
-        """Create STEP 1: File loading section.
-
-        Args:
-            main_layout: Main layout to add this section to
-        """
-        step1_title = QLabel(Messages.SECTION_STEP1)
-        step1_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 20px; margin-bottom: 8px;")
-        main_layout.addWidget(step1_title)
-
-        step1_group = QGroupBox()
-        step1_layout = QHBoxLayout()
-        step1_layout.setContentsMargins(10, 10, 10, 15)
-
-        self.file_label = QLabel(Messages.LABEL_NO_FILE)
-        step1_layout.addWidget(self.file_label)
-
-        step1_layout.addStretch()
-
-        load_btn = QPushButton(Messages.BTN_LOAD_CSV)
-        load_btn.clicked.connect(self.load_csv)
-        step1_layout.addWidget(load_btn)
-
-        step1_group.setLayout(step1_layout)
-        main_layout.addWidget(step1_group)
-
-        # Separate info label (outside the group box)
-        self.info_label = QLabel("")
-        self.info_label.setStyleSheet("color: green; font-weight: bold;")
-        main_layout.addWidget(self.info_label)
-
-    def _create_recipient_column(self) -> QVBoxLayout:
-        """Create the left column with recipient data display.
-
-        Returns:
-            QVBoxLayout: Layout containing recipient display area
-        """
-        left_column = QVBoxLayout()
-
-        dest_title = QLabel(Messages.LABEL_RECIPIENT)
-        dest_title.setStyleSheet("font-weight: bold; margin-top: 10px; margin-bottom: 5px;")
-        left_column.addWidget(dest_title)
-
-        dest_group = QGroupBox()
-        dest_layout = QVBoxLayout()
-
-        self.dest_text = QTextEdit()
-        self.dest_text.setReadOnly(True)
-        self.dest_text.setFixedHeight(150)
-        self.dest_text.setStyleSheet("background-color: #f0f0f0; color: #000000;")
-        font = QFont(get_monospace_font(), 10)
-        self.dest_text.setFont(font)
-        dest_layout.addWidget(self.dest_text)
-
-        dest_group.setLayout(dest_layout)
-        left_column.addWidget(dest_group)
-
-        return left_column
-
-    def _create_shipment_column(self) -> QVBoxLayout:
-        """Create the right column with shipment data inputs.
-
-        Returns:
-            QVBoxLayout: Layout containing shipment input fields
-        """
-        right_column = QVBoxLayout()
-
-        sped_title = QLabel(Messages.LABEL_SHIPMENT_DATA)
-        sped_title.setStyleSheet("font-weight: bold; margin-top: 10px; margin-bottom: 5px;")
-        right_column.addWidget(sped_title)
-
-        sped_group = QGroupBox()
-        sped_layout = QGridLayout()
-
-        # Number of packages
-        sped_layout.addWidget(QLabel(Messages.LABEL_NUM_PACKAGES), 0, 0)
-        self.colli_input = QLineEdit(str(self.default_colli))
-        self.colli_input.setMaximumWidth(100)
-        self.colli_input.returnPressed.connect(lambda: self.peso_input.setFocus())
-        sped_layout.addWidget(self.colli_input, 0, 1)
-
-        # Weight
-        sped_layout.addWidget(QLabel(Messages.LABEL_TOTAL_WEIGHT), 1, 0)
-        self.peso_input = QLineEdit(str(self.default_peso))
-        self.peso_input.setMaximumWidth(100)
-        self.peso_input.returnPressed.connect(self.save_and_next)
-        sped_layout.addWidget(self.peso_input, 1, 1)
-
-        # Quick templates
-        template_label = QLabel(Messages.LABEL_QUICK_TEMPLATES)
-        sped_layout.addWidget(template_label, 2, 0)
-
-        template_row = QVBoxLayout()
-
-        btn1 = QPushButton(Messages.BTN_TEMPLATE_1)
-        btn1.clicked.connect(lambda: self.apply_template(1, 5))
-        template_row.addWidget(btn1)
-
-        btn2 = QPushButton(Messages.BTN_TEMPLATE_2)
-        btn2.clicked.connect(lambda: self.apply_template(1, 10))
-        template_row.addWidget(btn2)
-
-        btn3 = QPushButton(Messages.BTN_TEMPLATE_3)
-        btn3.clicked.connect(lambda: self.apply_template(2, 15))
-        template_row.addWidget(btn3)
-
-        sped_layout.addLayout(template_row, 2, 1)
-
-        sped_group.setLayout(sped_layout)
-        right_column.addWidget(sped_group)
-
-        return right_column
-
-    def _create_navigation_buttons(self) -> QHBoxLayout:
-        """Create navigation buttons layout.
-
-        Returns:
-            QHBoxLayout: Layout containing all navigation buttons
-        """
-        nav_layout = QHBoxLayout()
-
-        self.prev_btn = QPushButton(Messages.BTN_PREVIOUS)
-        self.prev_btn.clicked.connect(self.previous_item)
-        self.prev_btn.setStyleSheet(self._get_button_style('plain'))
-        nav_layout.addWidget(self.prev_btn)
-
-        self.skip_btn = QPushButton(Messages.BTN_SKIP)
-        self.skip_btn.clicked.connect(self.skip_item)
-        self.skip_btn.setStyleSheet(self._get_button_style('plain'))
-        nav_layout.addWidget(self.skip_btn)
-
-        self.goto_skipped_btn = QPushButton(Messages.BTN_GOTO_SKIPPED)
-        self.goto_skipped_btn.clicked.connect(self.goto_next_skipped)
-        self.goto_skipped_btn.setStyleSheet(self._get_button_style('warning'))
-        nav_layout.addWidget(self.goto_skipped_btn)
-
-        self.save_next_btn = QPushButton(Messages.BTN_SAVE_AND_NEXT)
-        self.save_next_btn.clicked.connect(self.save_and_next_unified)
-        self.save_next_btn.setStyleSheet(self._get_button_style('primary'))
-        nav_layout.addWidget(self.save_next_btn)
-
-        return nav_layout
-
-    def _create_step2_data_entry(self, main_layout: QVBoxLayout) -> None:
-        """Create STEP 2: Data entry section.
-
-        Args:
-            main_layout: Main layout to add this section to
-        """
-        step2_title = QLabel(Messages.SECTION_STEP2)
-        step2_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 0px; margin-bottom: 8px;")
-        main_layout.addWidget(step2_title)
-
-        step2_group = QGroupBox()
-        step2_layout = QVBoxLayout()
-
-        # 2-column layout for recipient and shipment data
-        columns_layout = QHBoxLayout()
-        columns_layout.addLayout(self._create_recipient_column())
-        columns_layout.addLayout(self._create_shipment_column())
-        step2_layout.addLayout(columns_layout)
-
-        # Progress
-        self.progress_label = QLabel(Messages.LABEL_PROGRESS_DEFAULT)
-        self.progress_label.setAlignment(Qt.AlignCenter)
-        self.progress_label.setStyleSheet("font-size: 14px; font-weight: bold;")
-        step2_layout.addWidget(self.progress_label)
-
-        self.progress_bar = QProgressBar()
-        step2_layout.addWidget(self.progress_bar)
-
-        # Summary
-        self.summary_label = QLabel("")
-        self.summary_label.setAlignment(Qt.AlignCenter)
-        step2_layout.addWidget(self.summary_label)
-
-        # Navigation buttons
-        step2_layout.addLayout(self._create_navigation_buttons())
-
-        step2_group.setLayout(step2_layout)
-        main_layout.addWidget(step2_group)
-
-    def _create_step3_export(self, main_layout: QVBoxLayout) -> None:
-        """Create STEP 3: Export section.
-
-        Args:
-            main_layout: Main layout to add this section to
-        """
-        step3_title = QLabel(Messages.SECTION_STEP3)
-        step3_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 20px; margin-bottom: 8px;")
-        main_layout.addWidget(step3_title)
-
-        step3_group = QGroupBox()
-        step3_layout = QHBoxLayout()
-        step3_layout.setContentsMargins(10, 10, 10, 15)
-
-        step3_layout.addStretch()  # Space to center the button
-
-        self.export_btn = QPushButton(Messages.BTN_EXPORT_CSV)
-        self.export_btn.clicked.connect(self.export_brt_csv)
-        self.export_btn.setStyleSheet(self._get_button_style('info'))
-        step3_layout.addWidget(self.export_btn)
-
-        step3_layout.addStretch()  # Space to center the button
-
-        step3_group.setLayout(step3_layout)
-        main_layout.addWidget(step3_group)
-
-        # Separate export label (outside the group box)
-        self.export_label = QLabel("")
-        self.export_label.setStyleSheet("color: green; font-weight: bold;")
-        self.export_label.setWordWrap(True)
-        main_layout.addWidget(self.export_label)
-
-    def _create_main_screen(self) -> QWidget:
-        """Create the main screen by composing all sections.
-
-        Returns:
-            QWidget: The complete main screen widget
-        """
-        # Widget for the main screen
-        main_widget = QWidget()
-
-        # Main layout
-        main_layout = QVBoxLayout()
-        main_layout.setSpacing(10)  # Reduced spacing between main elements
-        main_layout.setContentsMargins(10, 20, 10, 10)  # Top margin to distance logos from edge
-        main_widget.setLayout(main_layout)
-
-        # Add all sections
-        main_layout.addLayout(self._create_header_logos())
-        self._create_step1_file_loading(main_layout)
-        self._create_step2_data_entry(main_layout)
-        self._create_step3_export(main_layout)
-
-        return main_widget
-
-    def _create_settings_screen(self) -> QWidget:
-        """Create the settings screen"""
-        settings_widget = QWidget()
-
-        layout = QVBoxLayout()
-        layout.setSpacing(20)
-        layout.setContentsMargins(50, 50, 50, 50)
-        settings_widget.setLayout(layout)
-
-        # Title
-        title = QLabel(Messages.SETTINGS_TITLE)
-        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 10px;")
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-
-        # Description
-        description = QLabel(Messages.SETTINGS_DESCRIPTION)
-        description.setStyleSheet("font-size: 12px; color: #666666; margin-bottom: 20px;")
-        description.setAlignment(Qt.AlignCenter)
-        description.setWordWrap(True)
-        layout.addWidget(description)
-
-        # Group box for default values
-        defaults_group = QGroupBox(Messages.SETTINGS_GROUP_DEFAULTS)
-        defaults_group.setStyleSheet("font-size: 14px; font-weight: bold;")
-        defaults_layout = QGridLayout()
-        defaults_layout.setSpacing(15)
-
-        # Default number of packages
-        defaults_layout.addWidget(QLabel(Messages.LABEL_DEFAULT_PACKAGES), 0, 0)
-        self.settings_colli_input = QLineEdit(str(self.default_colli))
-        self.settings_colli_input.setMaximumWidth(150)
-        defaults_layout.addWidget(self.settings_colli_input, 0, 1)
-
-        # Default weight
-        defaults_layout.addWidget(QLabel(Messages.LABEL_DEFAULT_WEIGHT), 1, 0)
-        self.settings_peso_input = QLineEdit(str(self.default_peso))
-        self.settings_peso_input.setMaximumWidth(150)
-        defaults_layout.addWidget(self.settings_peso_input, 1, 1)
-
-        defaults_group.setLayout(defaults_layout)
-        layout.addWidget(defaults_group)
-
-        # Group box for BRT fixed fields
-        brt_group = QGroupBox(Messages.SETTINGS_GROUP_BRT)
-        brt_group.setStyleSheet("font-size: 14px; font-weight: bold;")
-        brt_layout = QGridLayout()
-        brt_layout.setSpacing(15)
-
-        # Customer code
-        brt_layout.addWidget(QLabel(Messages.LABEL_CUSTOMER_CODE), 0, 0)
-        self.settings_customer_code_input = QLineEdit(self.brt_customer_code)
-        self.settings_customer_code_input.setMaximumWidth(300)
-        brt_layout.addWidget(self.settings_customer_code_input, 0, 1)
-
-        # Alphabetic reference
-        brt_layout.addWidget(QLabel(Messages.LABEL_ALPHABETIC_REF), 1, 0)
-        self.settings_alphabetic_ref_input = QLineEdit(self.brt_alphabetic_ref)
-        self.settings_alphabetic_ref_input.setMaximumWidth(300)
-        brt_layout.addWidget(self.settings_alphabetic_ref_input, 1, 1)
-
-        # Goods type
-        brt_layout.addWidget(QLabel(Messages.LABEL_GOODS_TYPE), 2, 0)
-        self.settings_goods_type_input = QLineEdit(self.brt_goods_type)
-        self.settings_goods_type_input.setMaximumWidth(300)
-        brt_layout.addWidget(self.settings_goods_type_input, 2, 1)
-
-        # Tariff code
-        brt_layout.addWidget(QLabel(Messages.LABEL_TARIFF_CODE), 3, 0)
-        self.settings_tariff_code_input = QLineEdit(self.brt_tariff_code)
-        self.settings_tariff_code_input.setMaximumWidth(300)
-        brt_layout.addWidget(self.settings_tariff_code_input, 3, 1)
-
-        # Service type
-        brt_layout.addWidget(QLabel(Messages.LABEL_SERVICE_TYPE), 4, 0)
-        self.settings_service_type_input = QLineEdit(self.brt_service_type)
-        self.settings_service_type_input.setMaximumWidth(300)
-        brt_layout.addWidget(self.settings_service_type_input, 4, 1)
-
-        brt_group.setLayout(brt_layout)
-        layout.addWidget(brt_group)
-
-        # Spacer
-        layout.addStretch()
-
-        # Buttons
-        buttons_layout = QHBoxLayout()
-
-        # Back button
-        back_btn = QPushButton(Messages.BTN_BACK)
-        back_btn.clicked.connect(self.show_main_screen)
-        back_btn.setStyleSheet(self._get_button_style('secondary'))
-        buttons_layout.addWidget(back_btn)
-
-        buttons_layout.addStretch()
-
-        # Save button
-        save_btn = QPushButton(Messages.BTN_SAVE_SETTINGS)
-        save_btn.clicked.connect(self.save_settings_and_return)
-        save_btn.setStyleSheet(self._get_button_style('success'))
-        buttons_layout.addWidget(save_btn)
-
-        layout.addLayout(buttons_layout)
-
-        return settings_widget
 
     def show_settings(self) -> None:
         """Show the settings screen"""
