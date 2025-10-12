@@ -4,7 +4,7 @@ BRT Shipping Management Application - PyQt5
 Converts the LISTADDT.csv file to the format required by BRT
 """
 
-__version__ = "3.3.0"
+__version__ = "3.4.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-12"
 __developer__ = "Marco De Luca"
@@ -29,7 +29,7 @@ from typing import Optional, Dict, List, Any, Tuple
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QPushButton, QLineEdit,
                               QTextEdit, QProgressBar, QFileDialog, QMessageBox,
-                              QGroupBox, QGridLayout, QStackedWidget, QMenuBar, QMenu, QAction, QDialog)
+                              QGroupBox, QGridLayout, QStackedWidget, QMenuBar, QMenu, QAction)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 
@@ -45,166 +45,17 @@ from utils import get_monospace_font, setup_logging, MONOSPACE_FONT, logger
 # Import models from separate module
 from models import AppSettings, validate_shipment_input
 
+# Import update components from separate module
+from updater import UpdateDownloader, UpdateChecker
+
+# Import UI dialogs from separate module
+from ui.dialogs import DownloadDialog, AboutDialog
+
 
 # ============================================================================
-# UPDATE COMPONENTS
+# MAIN APPLICATION
 # ============================================================================
 
-
-class UpdateDownloader(QThread):
-    """Thread to download the update"""
-    download_progress = pyqtSignal(int)  # Download percentage
-    download_complete = pyqtSignal(str)  # Downloaded file path
-    download_failed = pyqtSignal(str)  # Error message
-
-    def __init__(self, download_url: str, filename: str, download_path: str) -> None:
-        super().__init__()
-        self.download_url = download_url
-        self.filename = filename
-        self.download_path = download_path
-
-    def run(self) -> None:
-        """Download the file"""
-        download_dir = Path(self.download_path)
-        file_path = download_dir / self.filename
-
-        try:
-            # Download with progress
-            req = urllib.request.Request(self.download_url)
-            req.add_header('User-Agent', NetworkSettings.USER_AGENT)
-
-            with urllib.request.urlopen(req, timeout=NetworkSettings.TIMEOUT_MEDIUM) as response:
-                total_size = int(response.headers.get('Content-Length', 0))
-                downloaded = 0
-                chunk_size = NetworkSettings.CHUNK_SIZE
-
-                with open(str(file_path), 'wb') as f:
-                    while True:
-                        chunk = response.read(chunk_size)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        downloaded += len(chunk)
-
-                        if total_size > 0:
-                            progress = int((downloaded / total_size) * 100)
-                            self.download_progress.emit(progress)
-
-            logger.info(f"Update downloaded successfully to {file_path}")
-            self.download_complete.emit(str(file_path))
-
-        except Exception as e:
-            logger.error(f"Failed to download update from {self.download_url}: {e}", exc_info=True)
-            self.download_failed.emit(str(e))
-
-
-class DownloadDialog(QDialog):
-    """Custom dialog for showing download progress"""
-
-    def __init__(self, parent: Optional[QWidget], filename: str) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(Messages.TITLE_DOWNLOAD)
-        self.setModal(True)
-        self.setMinimumWidth(UIConstants.DIALOG_MIN_WIDTH)
-
-        # Main layout
-        layout = QVBoxLayout(self)
-        layout.setSpacing(UIConstants.SPACING_MEDIUM)
-
-        # Message label
-        self.message_label = QLabel(Messages.format(Messages.MSG_UPDATE_DOWNLOADING, filename=filename))
-        self.message_label.setWordWrap(True)
-        self.message_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.message_label)
-
-        # Progress bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMinimum(0)
-        self.progress_bar.setMaximum(100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(True)
-        layout.addWidget(self.progress_bar)
-
-        # Add some spacing at the bottom
-        layout.addSpacing(UIConstants.SPACING_SMALL)
-
-        self.setLayout(layout)
-
-    def update_progress(self, progress: int) -> None:
-        """Update the progress bar value"""
-        self.progress_bar.setValue(progress)
-
-
-class UpdateChecker(QThread):
-    """Thread to check for updates on GitHub"""
-    update_available = pyqtSignal(str, str, str)  # (new_version, release_url, download_url)
-
-    def __init__(self, current_version: str) -> None:
-        super().__init__()
-        self.current_version = current_version
-        self.github_repo = "Marco22874/BRT"
-
-    def run(self) -> None:
-        """Check if there's a new version on GitHub"""
-        try:
-            # GitHub API call to get the latest release
-            url = f"https://api.github.com/repos/{self.github_repo}/releases/latest"
-            req = urllib.request.Request(url)
-            req.add_header('User-Agent', 'BRT-Spedizioni-App')
-
-            with urllib.request.urlopen(req, timeout=5) as response:
-                data = json.loads(response.read().decode())
-
-            latest_version = data.get('tag_name', '').lstrip('v')
-            release_url = data.get('html_url', '')
-
-            # Find the right file for the current platform
-            download_url = self._get_platform_download_url(data.get('assets', []))
-
-            # Compare versions
-            if latest_version and self._is_newer_version(latest_version):
-                self.update_available.emit(latest_version, release_url, download_url)
-
-        except Exception as e:
-            # Log update check failures (network errors are expected if offline)
-            logger.debug(f"Update check failed (this is normal if offline): {e}")
-
-    def _get_platform_download_url(self, assets: List[Dict[str, Any]]) -> str:
-        """Find the correct download URL for the platform"""
-        system = platform.system()
-
-        for asset in assets:
-            name = asset.get('name', '')
-            name_lower = name.lower()
-
-            if system == 'Windows':
-                # Look for files with _win or windows in the name
-                if ('_win' in name_lower or 'windows' in name_lower) and name_lower.endswith('.zip'):
-                    return asset.get('browser_download_url', '')
-            elif system == 'Darwin':
-                # Look for files without _win/windows (so it's for macOS)
-                if name_lower.endswith('.zip') and '_win' not in name_lower and 'windows' not in name_lower:
-                    return asset.get('browser_download_url', '')
-
-        return ''
-
-    def _is_newer_version(self, latest: str) -> bool:
-        """Compare versions (format: X.Y.Z)"""
-        try:
-            current_parts = [int(x) for x in self.current_version.split('.')]
-            latest_parts = [int(x) for x in latest.split('.')]
-
-            # Compare major, minor, patch
-            for curr, lat in zip(current_parts, latest_parts):
-                if lat > curr:
-                    return True
-                elif lat < curr:
-                    return False
-
-            return False
-        except Exception as e:
-            logger.debug(f"Failed to compare versions (current: {self.current_version}, latest: {latest}): {e}")
-            return False
 
 
 class BRTSpedizioniApp(QMainWindow):
@@ -722,82 +573,7 @@ class BRTSpedizioniApp(QMainWindow):
 
     def show_about_dialog(self) -> None:
         """Show the about dialog"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Informazioni")
-        dialog.setMinimumWidth(500)
-
-        # Main Layout
-        main_layout = QVBoxLayout()
-        main_layout.setSpacing(20)
-        main_layout.setContentsMargins(30, 30, 30, 30)
-
-        # Header with logos and arrows
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(20)
-
-        # IGEA logo (left)
-        igea_logo = QLabel()
-        igea_logo_path = Path(__file__).parent / FileSettings.LOGO_IGEA
-        if igea_logo_path.exists():
-            pixmap_igea = QPixmap(str(igea_logo_path))
-            # Scale with fixed height of 60px, proportional width
-            scaled_igea = pixmap_igea.scaledToHeight(UIConstants.LOGO_HEIGHT_DIALOG, Qt.SmoothTransformation)
-            igea_logo.setPixmap(scaled_igea)
-        header_layout.addWidget(igea_logo)
-
-        # Arrows in the center
-        arrows_label = QLabel("→\n←")
-        arrows_label.setFont(QFont("Arial", 32))
-        arrows_label.setAlignment(Qt.AlignCenter)
-        arrows_label.setStyleSheet("color: #666666;")
-        header_layout.addWidget(arrows_label)
-
-        # BRT logo (right)
-        brt_logo = QLabel()
-        brt_logo_path = Path(__file__).parent / FileSettings.LOGO_BRT
-        if brt_logo_path.exists():
-            pixmap_brt = QPixmap(str(brt_logo_path))
-            # Scale with fixed height of 60px, proportional width
-            scaled_brt = pixmap_brt.scaledToHeight(UIConstants.LOGO_HEIGHT_DIALOG, Qt.SmoothTransformation)
-            brt_logo.setPixmap(scaled_brt)
-        header_layout.addWidget(brt_logo)
-
-        main_layout.addLayout(header_layout)
-
-        # App information
-        info_text = f"""
-<div style='text-align: center;'>
-<h2>{__app_name__}</h2>
-<p><b>Versione:</b> {__version__}</p>
-<p><b>Data di rilascio:</b> {__release_date__}</p>
-<br>
-<p><b>Sviluppato da:</b> {__developer__}</p>
-<p><b>Support:</b> support@nextcode.it</p>
-</div>
-        """
-
-        info_label = QLabel(info_text)
-        info_label.setTextFormat(Qt.RichText)
-        info_label.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(info_label)
-
-        # Ok button
-        ok_button = QPushButton(Messages.BTN_OK)
-        ok_button.clicked.connect(dialog.accept)
-        ok_button.setMinimumWidth(100)
-
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(ok_button)
-        button_layout.addStretch()
-        main_layout.addLayout(button_layout)
-
-        dialog.setLayout(main_layout)
-
-        # Set window icon if available
-        if igea_logo_path.exists():
-            dialog.setWindowIcon(QIcon(str(igea_logo_path)))
-
+        dialog = AboutDialog(self, __app_name__, __version__, __release_date__, __developer__)
         dialog.exec_()
 
     def save_settings_and_return(self) -> None:
