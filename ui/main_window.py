@@ -29,10 +29,11 @@ from services.updater import UpdateDownloader, UpdateChecker
 from .dialogs import DownloadDialog, AboutDialog
 from .components.settings_manager import SettingsManager
 from .components.csv_handler import CsvHandler
+from .components.navigation_handler import NavigationHandler
 
 
 # Application metadata (imported from main module)
-__version__ = "3.8.0"
+__version__ = "3.9.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-12"
 __developer__ = "Marco De Luca"
@@ -68,8 +69,8 @@ class BRTSpedizioniApp(QMainWindow):
         # Initialize CSV handler
         self.csv_handler = CsvHandler(self, self.save_file)
 
-        # Skip navigation mode
-        self.skip_navigation_mode: bool = False
+        # Initialize navigation handler
+        self.navigation_handler = NavigationHandler(self)
 
         # Default settings
         self.default_colli: int = 1
@@ -1221,9 +1222,10 @@ rm -f "$0"
 
         colli_int, peso_float = validated_data
 
-        # Save data in current record
-        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABNCL'] = str(colli_int)
-        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABPKB'] = f"{peso_float:.1f}"
+        # Save data in current record using navigation handler
+        self.navigation_handler.save_record_data(
+            self.df_spedizioni, self.current_index, colli_int, peso_float
+        )
 
         # Invalidate cache since DataFrame changed
         self._invalidate_cache()
@@ -1231,54 +1233,10 @@ rm -f "$0"
         # Save to file
         self.save_data_to_file()
 
-        # If in skip navigation mode, go to next skipped
-        if self.skip_navigation_mode:
-            # Find all skipped records
-            skipped_indices = self.df_spedizioni[self.df_spedizioni['VABNCL'] == 'SKIP'].index.tolist()
-
-            if not skipped_indices:
-                # No more skipped records!
-                # Exit mode and find first empty record (if exists)
-                self.skip_navigation_mode = False
-
-                # Look for first NOT completed record
-                empty_indices = self.df_spedizioni[self.df_spedizioni['VABNCL'] == ''].index.tolist()
-
-                if empty_indices:
-                    # There are still empty records to fill
-                    # Go to first empty record
-                    first_empty = self.df_spedizioni.index.get_loc(empty_indices[0])
-                    self.current_index = first_empty
-                else:
-                    # All completed! Go to last record
-                    total = len(self.df_spedizioni)
-                    self.current_index = total - 1
-
-                self.show_current_record()
-                return
-
-            # Look for first skipped record AFTER current index
-            next_skipped = None
-            for idx in skipped_indices:
-                idx_pos = self.df_spedizioni.index.get_loc(idx)
-                if idx_pos > self.current_index:  # type: ignore
-                    next_skipped = idx_pos
-                    break
-
-            # If there are none after, take the first one
-            if next_skipped is None:
-                next_skipped = self.df_spedizioni.index.get_loc(skipped_indices[0])
-
-            # Go to next skipped record
-            self.current_index = next_skipped
-        else:
-            # Normal mode: go to next in sequence
-            total = len(self.df_spedizioni)
-            is_last = self.current_index >= total - 1  # type: ignore
-
-            if not is_last:
-                # Go to next record
-                self.current_index += 1  # type: ignore
+        # Navigate to next record (skip-mode aware)
+        self.current_index = self.navigation_handler.handle_save_and_next_unified(
+            self.df_spedizioni, self.current_index
+        )
 
         # Update display
         self.show_current_record()
@@ -1290,7 +1248,8 @@ rm -f "$0"
             return
 
         # Check we're not already at the last record
-        if self.current_index >= len(self.df_spedizioni) - 1:  # type: ignore
+        next_index = self.navigation_handler.go_to_next(self.df_spedizioni, self.current_index)
+        if next_index is None:
             QMessageBox.warning(self, Messages.TITLE_WARNING,
                 Messages.MSG_ALREADY_LAST)
             return
@@ -1302,10 +1261,10 @@ rm -f "$0"
 
         colli_int, peso_float = validated_data
 
-        # Save data ONLY in current record (never adds rows)
-        # Use loc for safe assignment
-        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABNCL'] = str(colli_int)
-        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABPKB'] = f"{peso_float:.1f}"
+        # Save data in current record using navigation handler
+        self.navigation_handler.save_record_data(
+            self.df_spedizioni, self.current_index, colli_int, peso_float
+        )
 
         # Invalidate cache since DataFrame changed
         self._invalidate_cache()
@@ -1313,8 +1272,8 @@ rm -f "$0"
         # Save to file
         self.save_data_to_file()
 
-        # Go to next (we already verified it's not the last)
-        self.current_index += 1  # type: ignore
+        # Go to next
+        self.current_index = next_index
         self.show_current_record()
 
     def save_current(self) -> None:
@@ -1330,9 +1289,10 @@ rm -f "$0"
 
         colli_int, peso_float = validated_data
 
-        # Save data in current record
-        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABNCL'] = str(colli_int)
-        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABPKB'] = f"{peso_float:.1f}"
+        # Save data in current record using navigation handler
+        self.navigation_handler.save_record_data(
+            self.df_spedizioni, self.current_index, colli_int, peso_float
+        )
 
         # Invalidate cache since DataFrame changed
         self._invalidate_cache()
@@ -1349,9 +1309,8 @@ rm -f "$0"
         if self.df_spedizioni is None:
             return
 
-        # Mark as skipped
-        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABNCL'] = 'SKIP'
-        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABPKB'] = 'SKIP'
+        # Mark as skipped using navigation handler
+        self.navigation_handler.skip_current_record(self.df_spedizioni, self.current_index)
 
         # Invalidate cache since DataFrame changed
         self._invalidate_cache()
@@ -1360,54 +1319,30 @@ rm -f "$0"
         self.save_data_to_file()
 
         # Go to next
-        if self.current_index < len(self.df_spedizioni) - 1: # type: ignore 
-            self.current_index += 1 # type: ignore 
+        self.current_index = self.navigation_handler.go_to_next_with_skip(
+            self.df_spedizioni, self.current_index
+        )
         self.show_current_record()
 
     def previous_item(self) -> None:
         """Go back to previous record"""
 
-        if self.df_spedizioni is None or self.current_index == 0:  # type: ignore
-            return
+        prev_index = self.navigation_handler.go_to_previous(self.df_spedizioni, self.current_index)
 
-        # Exit skip navigation mode
-        self.skip_navigation_mode = False
-
-        self.current_index -= 1  # type: ignore
-        self.show_current_record()
+        if prev_index is not None:
+            self.current_index = prev_index
+            self.show_current_record()
 
     def goto_next_skipped(self) -> None:
         """Go to next skipped record (SKIP)"""
 
-        if self.df_spedizioni is None:
-            return
+        next_skipped = self.navigation_handler.goto_next_skipped(
+            self.df_spedizioni, self.current_index
+        )
 
-        # Find all skipped records
-        skipped_indices = self.df_spedizioni[self.df_spedizioni['VABNCL'] == 'SKIP'].index.tolist()
-
-        if not skipped_indices:
-            QMessageBox.information(self, Messages.TITLE_INFO, Messages.MSG_NO_SKIPPED)
-            self.skip_navigation_mode = False
-            return
-
-        # Activate skip navigation mode
-        self.skip_navigation_mode = True
-
-        # Look for first skipped record AFTER current index
-        next_skipped = None
-        for idx in skipped_indices:
-            idx_pos = self.df_spedizioni.index.get_loc(idx)
-            if idx_pos > self.current_index:  # type: ignore
-                next_skipped = idx_pos
-                break
-
-        # If there are none after, take the first one (restart from first)
-        if next_skipped is None:
-            next_skipped = self.df_spedizioni.index.get_loc(skipped_indices[0])
-
-        # Go to skipped record
-        self.current_index = next_skipped
-        self.show_current_record()
+        if next_skipped is not None:
+            self.current_index = next_skipped
+            self.show_current_record()
 
     def save_data_to_file(self) -> None:
         """Save compiled data to JSON file"""
