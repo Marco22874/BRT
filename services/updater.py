@@ -11,8 +11,8 @@ from typing import List, Dict, Any
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
-from constants import NetworkSettings
-from utils import logger
+from core.constants import NetworkSettings
+from core.utils import logger
 
 
 class UpdateDownloader(QThread):

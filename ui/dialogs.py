@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QDialog, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 
-from constants import UIConstants, Messages, FileSettings
+from core.constants import UIConstants, Messages, FileSettings
 
 
 class DownloadDialog(QDialog):

@@ -25,16 +25,16 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 
-from constants import (UIConstants, Colors, RecordStatus, FileSettings,
-                      BRTDefaults, NetworkSettings, CSVColumns, Messages)
-from utils import get_monospace_font, MONOSPACE_FONT, logger
-from models import validate_shipment_input
-from updater import UpdateDownloader, UpdateChecker
-from ui.dialogs import DownloadDialog, AboutDialog
+from core.constants import (UIConstants, Colors, RecordStatus, FileSettings,
+                            BRTDefaults, CSVColumns, Messages)
+from core.utils import get_monospace_font, MONOSPACE_FONT, logger
+from core.models import validate_shipment_input
+from services.updater import UpdateDownloader, UpdateChecker
+from .dialogs import DownloadDialog, AboutDialog
 
 
 # Application metadata (imported from main module)
-__version__ = "3.5.0"
+__version__ = "3.6.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-12"
 __developer__ = "Marco De Luca"
