@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Applicazione per Gestione Spedizioni BRT - PyQt5
-Converte il file LISTADDT.csv nel formato richiesto da BRT
+BRT Shipping Management Application - PyQt5
+Converts the LISTADDT.csv file to the format required by BRT
 """
 
 __version__ = "2.15.0"
@@ -23,19 +23,345 @@ import shutil
 import os
 import time
 import zipfile
+import logging
+from enum import Enum
+from typing import Optional, Dict, List, Any, Tuple
 
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QPushButton, QLineEdit,
                               QTextEdit, QProgressBar, QFileDialog, QMessageBox,
-                              QGroupBox, QGridLayout, QStackedWidget, QMenuBar, QAction, QDialog)
+                              QGroupBox, QGridLayout, QStackedWidget, QMenuBar, QMenu, QAction, QDialog)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 
 
-def get_monospace_font():
+# ============================================================================
+# CONSTANTS
+# ============================================================================
+
+class UIConstants:
+    """Constants for UI dimensions and spacing"""
+    # Window dimensions
+    WINDOW_WIDTH = 900
+    WINDOW_HEIGHT = 800
+    WINDOW_X = 100
+    WINDOW_Y = 100
+
+    # Logo dimensions
+    LOGO_HEIGHT = 80
+    LOGO_HEIGHT_DIALOG = 60
+
+    # Input dimensions
+    INPUT_WIDTH_SMALL = 100
+    INPUT_WIDTH_MEDIUM = 150
+
+    # Text dimensions
+    DEST_TEXT_HEIGHT = 150
+    DIALOG_MIN_WIDTH = 500
+
+    # Spacing
+    SPACING_SMALL = 10
+    SPACING_MEDIUM = 20
+    SPACING_LARGE = 50
+
+    # Font size
+    FONT_SIZE_TITLE = 20
+    FONT_SIZE_SECTION = 14
+    FONT_SIZE_NORMAL = 10
+    FONT_SIZE_LARGE = 24
+    FONT_SIZE_ARROWS = 32
+
+    # Button padding
+    BUTTON_PADDING_NORMAL = "8px 15px"
+    BUTTON_PADDING_LARGE = "10px 20px"
+    BUTTON_PADDING_EXTRA = "10px"
+
+
+class Colors:
+    """Constants for UI colors"""
+    # Primary colors
+    PRIMARY = "#16FEBC"
+    SUCCESS = "#28a745"
+    DANGER = "#DC012E"
+    WARNING = "#FFA500"
+    INFO = "#5F38E6"
+    SECONDARY = "#6c757d"
+
+    # Status colors
+    DISABLED = "#CCCCCC"
+    DISABLED_TEXT = "#666666"
+
+    # Text colors
+    TEXT_GRAY = "#666666"
+    TEXT_BLACK = "#333333"
+    TEXT_WHITE = "white"
+
+    # Background colors
+    BG_LIGHT_GRAY = "#f0f0f0"
+    BG_BLACK = "#000000"
+
+
+class RecordStatus(Enum):
+    """Enum for record status"""
+    EMPTY = ""
+    SKIP = "SKIP"
+
+    def __str__(self):
+        """Returns the enum value as a string"""
+        return self.value
+
+
+class FileSettings:
+    """Constants for files and paths"""
+    DATA_FILE = "brt_spedizioni_data.json"
+    SETTINGS_FILE = "brt_settings.json"
+    LOGO_IGEA = "igea_logo.png"
+    LOGO_BRT = "Logo_BRT.svg.png"
+    UPDATE_SCRIPT_WIN = "update_brt.bat"
+    UPDATE_SCRIPT_MAC = "update_brt.sh"
+    TEMP_UPDATE_DIR = "temp_update"
+    CSV_EXPORT_PREFIX = "spedizioni_BRT_"
+
+
+class BRTDefaults:
+    """Default values for BRT fixed fields"""
+    # Customer information
+    DEFAULT_CUSTOMER_CODE = '0091808'
+    DEFAULT_ALPHABETIC_REF = 'IGEA SRL'
+
+    # Shipment defaults
+    DEFAULT_GOODS_TYPE = 'DISPOSITIVI MEDICI'
+    DEFAULT_TARIFF_CODE = '100'
+    DEFAULT_SERVICE_TYPE = 'C'  # Express service
+
+    # Fixed values for Italy
+    DEFAULT_ABBUONO = ''  # Empty for Italy
+    DEFAULT_COUNTRY_DEST = ''  # Empty for Italy
+
+
+class NetworkSettings:
+    """Constants for network settings"""
+    GITHUB_REPO = "Marco22874/BRT"
+    USER_AGENT = "BRT-Spedizioni-App"
+    TIMEOUT_SHORT = 5
+    TIMEOUT_MEDIUM = 30
+    CHUNK_SIZE = 8192
+
+
+class CSVColumns:
+    """Constants for CSV column names and BRT mapping"""
+
+    # Input CSV Columns (IGEA)
+    INPUT_NUMERO = "RegisNumero"
+    INPUT_RAGIONE_SOCIALE = "SpedRagSoc1"
+    INPUT_INDIRIZZO = "SpedIndirizzo"
+    INPUT_LOCALITA = "SpedLocalita"
+    INPUT_TELEFONO = "SpedLocalita2"
+    INPUT_CAP = "SpedCAP"
+    INPUT_PROVINCIA = "SpedProvincia"
+    INPUT_COD_PORTO = "AccompCodPorto"
+
+    # BRT Output Columns
+    OUTPUT_NUM_SPEDIZIONE = "VABNSP"
+    OUTPUT_RAGIONE_SOCIALE = "VABRSD"
+    OUTPUT_INDIRIZZO = "VABIND"
+    OUTPUT_LOCALITA = "VABLOD"
+    OUTPUT_TELEFONO_REF = "VABTRC"
+    OUTPUT_CAP = "VABCAD"
+    OUTPUT_PROVINCIA = "VABPRD"
+    OUTPUT_COD_PORTO = "VABCBO"
+    OUTPUT_RIF_MITTENTE = "VABRMN"
+    OUTPUT_CELLULARE = "VABCEL"
+    OUTPUT_NUM_COLLI = "VABNCL"
+    OUTPUT_PESO_KG = "VABPKB"
+
+    # Fixed BRT Columns
+    OUTPUT_ABBUONO_TB = "VABATB"
+    OUTPUT_COD_CLIENTE = "VABCCM"
+    OUTPUT_NATURA_SPEDIZIONE = "VABNAS"
+    OUTPUT_RIF_ALFABETICO = "VABRMA"
+    OUTPUT_COD_TARIFFA = "VABCTR"
+    OUTPUT_NAZIONE_DEST = "VABNZD"
+    OUTPUT_TIPO_SERVIZIO = "VABTSP"
+
+    @classmethod
+    def get_required_input_columns(cls) -> List[str]:
+        """Returns the list of required columns from the input CSV"""
+        return [
+            cls.INPUT_NUMERO,
+            cls.INPUT_RAGIONE_SOCIALE,
+            cls.INPUT_INDIRIZZO,
+            cls.INPUT_LOCALITA,
+            cls.INPUT_TELEFONO,
+            cls.INPUT_CAP,
+            cls.INPUT_PROVINCIA,
+            cls.INPUT_COD_PORTO
+        ]
+
+    @classmethod
+    def get_column_mapping(cls) -> Dict[str, str]:
+        """Returns the mapping from input columns to output columns"""
+        return {
+            cls.INPUT_NUMERO: cls.OUTPUT_NUM_SPEDIZIONE,
+            cls.INPUT_RAGIONE_SOCIALE: cls.OUTPUT_RAGIONE_SOCIALE,
+            cls.INPUT_INDIRIZZO: cls.OUTPUT_INDIRIZZO,
+            cls.INPUT_LOCALITA: cls.OUTPUT_LOCALITA,
+            cls.INPUT_TELEFONO: cls.OUTPUT_TELEFONO_REF,
+            cls.INPUT_CAP: cls.OUTPUT_CAP,
+            cls.INPUT_PROVINCIA: cls.OUTPUT_PROVINCIA,
+            cls.INPUT_COD_PORTO: cls.OUTPUT_COD_PORTO
+        }
+
+    @classmethod
+    def get_brt_column_order(cls) -> List[str]:
+        """Returns the column order for BRT export"""
+        return [
+            cls.OUTPUT_ABBUONO_TB,
+            cls.OUTPUT_COD_CLIENTE,
+            cls.OUTPUT_NUM_SPEDIZIONE,
+            cls.OUTPUT_COD_PORTO,
+            cls.OUTPUT_RAGIONE_SOCIALE,
+            cls.OUTPUT_INDIRIZZO,
+            cls.OUTPUT_CAP,
+            cls.OUTPUT_LOCALITA,
+            cls.OUTPUT_PROVINCIA,
+            cls.OUTPUT_NAZIONE_DEST,
+            cls.OUTPUT_COD_TARIFFA,
+            cls.OUTPUT_TIPO_SERVIZIO,
+            cls.OUTPUT_NATURA_SPEDIZIONE,
+            cls.OUTPUT_NUM_COLLI,
+            cls.OUTPUT_PESO_KG,
+            cls.OUTPUT_RIF_MITTENTE,
+            cls.OUTPUT_RIF_ALFABETICO,
+            cls.OUTPUT_TELEFONO_REF,
+            cls.OUTPUT_CELLULARE
+        ]
+
+
+class Messages:
+    """Centralized messages for user interface - facilitates translation and maintenance"""
+
+    # Dialog Titles
+    TITLE_WARNING = "Attenzione"
+    TITLE_ERROR = "Errore"
+    TITLE_SUCCESS = "Successo"
+    TITLE_INFO = "Info"
+    TITLE_UPDATE_AVAILABLE = "Aggiornamento Disponibile"
+    TITLE_DOWNLOAD = "Download in corso"
+    TITLE_INSTALL_ERROR = "Errore Installazione"
+    TITLE_DOWNLOAD_ERROR = "Errore Download"
+
+    # Validation Messages
+    MSG_EMPTY_FIELDS = "Compilare tutti i campi (colli e peso)"
+    MSG_POSITIVE_VALUES = "Colli e peso devono essere maggiori di zero"
+    MSG_INVALID_VALUES = "Valori non validi per colli o peso"
+    MSG_INVALID_SETTINGS = "Valori non validi. Inserire numeri validi."
+    MSG_SETTINGS_POSITIVE = "I valori devono essere maggiori di zero"
+
+    # File Operations
+    MSG_LOAD_CSV_FIRST = "Carica prima un file CSV"
+    MSG_NO_RECORDS_TO_EXPORT = "Nessun record completato da esportare"
+    MSG_MISSING_COLUMNS = "Colonne mancanti nel CSV:\n{columns}"
+    MSG_FILE_LOAD_ERROR = "Errore nel caricamento del file:\n{error}"
+    MSG_FILE_EXPORT_ERROR = "Errore nell'esportazione:\n{error}"
+
+    # Success Messages
+    MSG_FILE_LOADED = "File caricato con successo!\n\nSpedizioni uniche: {count}\nDuplicati rimossi: {duplicates}"
+    MSG_FILE_EXPORTED = "File esportato con successo!\n\nSpedizioni esportate: {count}\nFile: {filename}\n\nOra puoi caricare questo file sul gestionale BRT."
+    MSG_SETTINGS_SAVED = "Impostazioni salvate con successo!"
+
+    # Navigation Messages
+    MSG_ALREADY_LAST = "Sei già all'ultimo record!\n\nNon ci sono altri clienti da compilare."
+    MSG_NO_SKIPPED = "Non ci sono record saltati da compilare!"
+
+    # Update Messages
+    MSG_UPDATE_AVAILABLE = """<div style='text-align: center;'>
+<h3>Nuova versione disponibile!</h3>
+<p>È disponibile la versione <b>{new_version}</b></p>
+<p>Versione attuale: <b>{current_version}</b></p>
+<br>
+<p>Vuoi scaricare l'aggiornamento?</p>
+</div>"""
+    MSG_UPDATE_DOWNLOADING = "Download di {filename} in corso...\n\nL'applicazione verrà chiusa e aggiornata automaticamente."
+    MSG_UPDATE_INSTALL_ERROR = "Impossibile installare l'aggiornamento:\n\n{error}\n\nIl file è stato salvato in:\n{path}"
+    MSG_UPDATE_DOWNLOAD_ERROR = "Impossibile scaricare l'aggiornamento:\n\n{error}"
+
+    # Button Labels
+    BTN_COMPLETED = "✓ COMPLETATO"
+    BTN_SAVE_AND_COMPLETE = "✓ SALVA E COMPLETA"
+    BTN_SAVE_AND_NEXT = "✓ SALVA E SUCCESSIVO ▶"
+    BTN_LOAD_CSV = "Carica file .csv"
+    BTN_EXPORT_CSV = "↑ Esporta CSV per BRT"
+    BTN_PREVIOUS = "◀ Precedente"
+    BTN_SKIP = "Salta"
+    BTN_GOTO_SKIPPED = "↻ Vai a Saltati"
+    BTN_BACK = "← Torna Indietro"
+    BTN_SAVE_SETTINGS = "✓ Salva Impostazioni"
+    BTN_OK = "OK"
+    BTN_DOWNLOAD_NOW = "Scarica Ora"
+    BTN_REMIND_LATER = "Ricordamelo dopo"
+    BTN_TEMPLATE_1 = "1 collo - 5kg"
+    BTN_TEMPLATE_2 = "1 collo - 10kg"
+    BTN_TEMPLATE_3 = "2 colli - 15kg"
+
+    # Status Labels
+    LABEL_NO_FILE = "Nessun file caricato"
+    LABEL_FILE_LOADED = "✓ {filename}"
+    LABEL_SHIPMENTS_LOADED = "✓ {count} spedizioni caricate ({duplicates} duplicati rimossi)"
+    LABEL_SHIPMENTS_EXPORTED = "✓ Esportate {count} spedizioni in:\n{filename}"
+    LABEL_PROGRESS = "Cliente {current}/{total} ({percent}%)"
+    LABEL_PROGRESS_DEFAULT = "0/0 (0%)"
+    LABEL_SUMMARY = "COMPLETATI: {completed} ✓  |  DA FARE: {empty}  |  SALTATI: {skipped}"
+    LABEL_SUMMARY_COMPLETE = "<span style='background-color: #28a745; color: white; padding: 5px 10px; font-weight: bold; border-radius: 3px;'>✓ COMPLETO - Tutti i {total} record compilati!</span>"
+
+    # UI Section Titles
+    SECTION_STEP1 = "STEP 1: Carica File CSV"
+    SECTION_STEP2 = "STEP 2: Compila Dati Spedizione"
+    SECTION_STEP3 = "STEP 3: Genera CSV per BRT"
+
+    # UI Field Labels
+    LABEL_RECIPIENT = "Destinatario (da CSV)"
+    LABEL_SHIPMENT_DATA = "Dati Spedizione (da compilare)"
+    LABEL_NUM_PACKAGES = "N. Colli:"
+    LABEL_TOTAL_WEIGHT = "Peso tot (kg):"
+    LABEL_QUICK_TEMPLATES = "Template rapidi:"
+    LABEL_DEFAULT_PACKAGES = "N. Colli di default:"
+    LABEL_DEFAULT_WEIGHT = "Peso di default (kg):"
+    LABEL_CUSTOMER_CODE = "Codice Cliente:"
+    LABEL_ALPHABETIC_REF = "Riferimento Alfabetico:"
+    LABEL_GOODS_TYPE = "Natura Spedizione:"
+    LABEL_TARIFF_CODE = "Codice Tariffa:"
+    LABEL_SERVICE_TYPE = "Tipo Servizio:"
+
+    # Settings Screen
+    SETTINGS_TITLE = "IMPOSTAZIONI"
+    SETTINGS_DESCRIPTION = "Imposta i valori di default per il numero di colli e il peso delle spedizioni, e i campi fissi per BRT"
+    SETTINGS_GROUP_DEFAULTS = "Valori di Default Spedizione"
+    SETTINGS_GROUP_BRT = "Campi Fissi BRT"
+
+    # File Dialog
+    FILE_DIALOG_TITLE_LOAD = "Seleziona LISTADDT.csv"
+    FILE_DIALOG_TITLE_SAVE = "Salva CSV per BRT"
+    FILE_DIALOG_FILTER = "CSV files (*.csv);;All files (*.*)"
+
+    @classmethod
+    def format(cls, message: str, **kwargs: Any) -> str:
+        """Format a message with given parameters.
+
+        Args:
+            message: Message template to format
+            **kwargs: Parameters to substitute in the message
+
+        Returns:
+            str: Formatted message
+        """
+        return message.format(**kwargs)
+
+
+def get_monospace_font() -> str:
     """
-    Restituisce il font monospaced appropriato in base al sistema operativo
-    per evitare warning su font mancanti
+    Returns the appropriate monospaced font based on the operating system
+    to avoid warnings for missing fonts
     """
     system = platform.system()
 
@@ -43,41 +369,85 @@ def get_monospace_font():
         return "Courier New"
     elif system == "Darwin":  # macOS
         return "Monaco"
-    else:  # Linux e altri
+    else:  # Linux and others
         return "Monospace"
 
 
-# Cache del font monospaced per uso globale
+# Cache of the monospaced font for global use
 MONOSPACE_FONT = get_monospace_font()
 
 
-class UpdateDownloader(QThread):
-    """Thread per scaricare l'aggiornamento"""
-    download_progress = pyqtSignal(int)  # Percentuale download
-    download_complete = pyqtSignal(str)  # Path del file scaricato
-    download_failed = pyqtSignal(str)  # Messaggio di errore
+def setup_logging() -> logging.Logger:
+    """
+    Configure the logging system for the application
+    Creates a logger that writes to both file and console
+    """
+    # Create logs directory if it doesn't exist
+    log_dir = Path(__file__).parent / "logs"
+    log_dir.mkdir(exist_ok=True)
 
-    def __init__(self, download_url, filename, download_path):
+    # Log file path with date
+    log_file = log_dir / f"brt_app_{datetime.now().strftime('%Y%m%d')}.log"
+
+    # Configure logging format
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    date_format = '%Y-%m-%d %H:%M:%S'
+
+    # Create logger
+    logger = logging.getLogger('BRTApp')
+    logger.setLevel(logging.DEBUG)
+
+    # Avoid duplicate handlers if logger already exists
+    if logger.handlers:
+        return logger
+
+    # File handler - logs everything (DEBUG and above)
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(log_format, date_format))
+    logger.addHandler(file_handler)
+
+    # Console handler - logs only INFO and above
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter(log_format, date_format))
+    logger.addHandler(console_handler)
+
+    return logger
+
+
+# Initialize logger globally
+logger = setup_logging()
+
+
+class UpdateDownloader(QThread):
+    """Thread to download the update"""
+    download_progress = pyqtSignal(int)  # Download percentage
+    download_complete = pyqtSignal(str)  # Downloaded file path
+    download_failed = pyqtSignal(str)  # Error message
+
+    def __init__(self, download_url: str, filename: str, download_path: str) -> None:
         super().__init__()
         self.download_url = download_url
         self.filename = filename
         self.download_path = download_path
 
-    def run(self):
-        """Scarica il file"""
+    def run(self) -> None:
+        """Download the file"""
+        download_dir = Path(self.download_path)
+        file_path = download_dir / self.filename
+
         try:
-            file_path = Path(self.download_path) / self.filename
-
-            # Scarica con progress
+            # Download with progress
             req = urllib.request.Request(self.download_url)
-            req.add_header('User-Agent', 'BRT-Spedizioni-App')
+            req.add_header('User-Agent', NetworkSettings.USER_AGENT)
 
-            with urllib.request.urlopen(req, timeout=30) as response:
+            with urllib.request.urlopen(req, timeout=NetworkSettings.TIMEOUT_MEDIUM) as response:
                 total_size = int(response.headers.get('Content-Length', 0))
                 downloaded = 0
-                chunk_size = 8192
+                chunk_size = NetworkSettings.CHUNK_SIZE
 
-                with open(file_path, 'wb') as f:
+                with open(str(file_path), 'wb') as f:
                     while True:
                         chunk = response.read(chunk_size)
                         if not chunk:
@@ -89,25 +459,64 @@ class UpdateDownloader(QThread):
                             progress = int((downloaded / total_size) * 100)
                             self.download_progress.emit(progress)
 
+            logger.info(f"Update downloaded successfully to {file_path}")
             self.download_complete.emit(str(file_path))
 
         except Exception as e:
+            logger.error(f"Failed to download update from {self.download_url}: {e}", exc_info=True)
             self.download_failed.emit(str(e))
 
 
-class UpdateChecker(QThread):
-    """Thread per controllare aggiornamenti su GitHub"""
-    update_available = pyqtSignal(str, str, str)  # (nuova_versione, url_release, download_url)
+class DownloadDialog(QDialog):
+    """Custom dialog for showing download progress"""
 
-    def __init__(self, current_version):
+    def __init__(self, parent: Optional[QWidget], filename: str) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(Messages.TITLE_DOWNLOAD)
+        self.setModal(True)
+        self.setMinimumWidth(UIConstants.DIALOG_MIN_WIDTH)
+
+        # Main layout
+        layout = QVBoxLayout(self)
+        layout.setSpacing(UIConstants.SPACING_MEDIUM)
+
+        # Message label
+        self.message_label = QLabel(Messages.format(Messages.MSG_UPDATE_DOWNLOADING, filename=filename))
+        self.message_label.setWordWrap(True)
+        self.message_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.message_label)
+
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        layout.addWidget(self.progress_bar)
+
+        # Add some spacing at the bottom
+        layout.addSpacing(UIConstants.SPACING_SMALL)
+
+        self.setLayout(layout)
+
+    def update_progress(self, progress: int) -> None:
+        """Update the progress bar value"""
+        self.progress_bar.setValue(progress)
+
+
+class UpdateChecker(QThread):
+    """Thread to check for updates on GitHub"""
+    update_available = pyqtSignal(str, str, str)  # (new_version, release_url, download_url)
+
+    def __init__(self, current_version: str) -> None:
         super().__init__()
         self.current_version = current_version
         self.github_repo = "Marco22874/BRT"
 
-    def run(self):
-        """Controlla se c'è una nuova versione su GitHub"""
+    def run(self) -> None:
+        """Check if there's a new version on GitHub"""
         try:
-            # Chiamata API GitHub per ottenere l'ultima release
+            # GitHub API call to get the latest release
             url = f"https://api.github.com/repos/{self.github_repo}/releases/latest"
             req = urllib.request.Request(url)
             req.add_header('User-Agent', 'BRT-Spedizioni-App')
@@ -118,19 +527,19 @@ class UpdateChecker(QThread):
             latest_version = data.get('tag_name', '').lstrip('v')
             release_url = data.get('html_url', '')
 
-            # Trova il file giusto per la piattaforma corrente
+            # Find the right file for the current platform
             download_url = self._get_platform_download_url(data.get('assets', []))
 
-            # Confronta versioni
+            # Compare versions
             if latest_version and self._is_newer_version(latest_version):
                 self.update_available.emit(latest_version, release_url, download_url)
 
         except Exception as e:
-            # Ignora errori di rete silenziosamente
-            print(f"Update check failed: {e}")
+            # Log update check failures (network errors are expected if offline)
+            logger.debug(f"Update check failed (this is normal if offline): {e}")
 
-    def _get_platform_download_url(self, assets):
-        """Trova l'URL di download corretto per la piattaforma"""
+    def _get_platform_download_url(self, assets: List[Dict[str, Any]]) -> str:
+        """Find the correct download URL for the platform"""
         system = platform.system()
 
         for asset in assets:
@@ -138,23 +547,23 @@ class UpdateChecker(QThread):
             name_lower = name.lower()
 
             if system == 'Windows':
-                # Cerca file con _win o windows nel nome
+                # Look for files with _win or windows in the name
                 if ('_win' in name_lower or 'windows' in name_lower) and name_lower.endswith('.zip'):
                     return asset.get('browser_download_url', '')
             elif system == 'Darwin':
-                # Cerca file senza _win/windows (quindi è per macOS)
+                # Look for files without _win/windows (so it's for macOS)
                 if name_lower.endswith('.zip') and '_win' not in name_lower and 'windows' not in name_lower:
                     return asset.get('browser_download_url', '')
 
         return ''
 
-    def _is_newer_version(self, latest):
-        """Confronta le versioni (formato: X.Y.Z)"""
+    def _is_newer_version(self, latest: str) -> bool:
+        """Compare versions (format: X.Y.Z)"""
         try:
             current_parts = [int(x) for x in self.current_version.split('.')]
             latest_parts = [int(x) for x in latest.split('.')]
 
-            # Confronta major, minor, patch
+            # Compare major, minor, patch
             for curr, lat in zip(current_parts, latest_parts):
                 if lat > curr:
                     return True
@@ -162,126 +571,141 @@ class UpdateChecker(QThread):
                     return False
 
             return False
-        except:
+        except Exception as e:
+            logger.debug(f"Failed to compare versions (current: {self.current_version}, latest: {latest}): {e}")
             return False
 
 
 class BRTSpedizioniApp(QMainWindow):
-    """Applicazione principale per gestione spedizioni BRT"""
+    """Main application for BRT shipping management"""
 
-    # Configurazione campi fissi BRT
+    # BRT fixed fields configuration
     CAMPI_FISSI = {
-        'VABATB': '',  # vuoto per Italia
-        'VABCCM': '0091808',  # Codice cliente
-        'VABNAS': 'DISPOSITIVI MEDICI',  # Natura merce
-        'VABRMA': 'IGEA SRL',  # Riferimento alfabetico
-        'VABCTR': '100',  # Codice tariffa
-        'VABNZD': '',  # vuoto per Italia
-        'VABTSP': 'C',  # Servizio Express
+        'VABATB': '',  # empty for Italy
+        'VABCCM': '0091808',  # Customer code
+        'VABNAS': 'DISPOSITIVI MEDICI',  # Goods type
+        'VABRMA': 'IGEA SRL',  # Alphabetic reference
+        'VABCTR': '100',  # Tariff code
+        'VABNZD': '',  # empty for Italy
+        'VABTSP': 'C',  # Express service
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
-        # Variabili
-        self.df_spedizioni = None
-        self.current_index = 0
-        # Salva il JSON nella stessa cartella dell'applicazione
-        self.save_file = Path(__file__).parent / "brt_spedizioni_data.json"
-        self.settings_file = Path(__file__).parent / "brt_settings.json"
-        # Modalità navigazione saltati
-        self.skip_navigation_mode = False
+        # Variables
+        self.df_spedizioni: Optional[pd.DataFrame] = None
+        self.current_index: int = 0
+        # Save JSON in the same folder as the application
+        self.save_file: Path = Path(__file__).parent / "brt_spedizioni_data.json"
+        self.settings_file: Path = Path(__file__).parent / "brt_settings.json"
+        # Skip navigation mode
+        self.skip_navigation_mode: bool = False
 
-        # Impostazioni di default
-        self.default_colli = 1
-        self.default_peso = 2
+        # Default settings
+        self.default_colli: int = 1
+        self.default_peso: int = 2
 
-        # Carica impostazioni salvate
+        # BRT configurable fields (will be loaded from settings)
+        self.brt_customer_code: str = BRTDefaults.DEFAULT_CUSTOMER_CODE
+        self.brt_alphabetic_ref: str = BRTDefaults.DEFAULT_ALPHABETIC_REF
+        self.brt_goods_type: str = BRTDefaults.DEFAULT_GOODS_TYPE
+        self.brt_tariff_code: str = BRTDefaults.DEFAULT_TARIFF_CODE
+        self.brt_service_type: str = BRTDefaults.DEFAULT_SERVICE_TYPE
+
+        # Cache for DataFrame counts (to avoid repeated calculations)
+        self._cache_total: int = 0
+        self._cache_completed: int = 0
+        self._cache_skipped: int = 0
+        self._cache_empty: int = 0
+        self._cache_dirty: bool = True
+
+        # Load saved settings
         self.load_settings()
 
-        # Inizializza interfaccia
-        self.init_ui()
+        # Initialize interface
+        self._init_ui()
 
-        # Carica dati salvati se esistono
+        # Load saved data if it exists
         self.load_saved_data()
 
-        # Avvia check aggiornamenti (in background)
+        # Start update check (in background)
         self.check_for_updates()
 
-    def init_ui(self):
-        """Inizializza l'interfaccia utente"""
+    def _init_ui(self) -> None:
+        """Initialize the user interface"""
 
         self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(100, 100, 900, 800)
 
-        # Imposta icona applicazione (logo IGEA)
-        icon_path = Path(__file__).parent / "igea_logo.png"
+        # Set application icon (IGEA logo)
+        icon_path = Path(__file__).parent / FileSettings.LOGO_IGEA
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
-        # Crea menu bar
-        self.create_menu_bar()
+        # Create menu bar
+        self._create_menu_bar()
 
-        # Crea stacked widget per cambiare tra schermata principale e impostazioni
+        # Create stacked widget to switch between main screen and settings
         self.stacked_widget = QStackedWidget()
         self.setCentralWidget(self.stacked_widget)
 
-        # Crea le due schermate
-        self.main_screen = self.create_main_screen()
-        self.settings_screen = self.create_settings_screen()
+        # Create the two screens
+        self.main_screen = self._create_main_screen()
+        self.settings_screen = self._create_settings_screen()
 
-        # Aggiungi le schermate allo stack
+        # Add screens to stack
         self.stacked_widget.addWidget(self.main_screen)
         self.stacked_widget.addWidget(self.settings_screen)
 
-        # Mostra schermata principale
+        # Show main screen
         self.stacked_widget.setCurrentWidget(self.main_screen)
 
-    def create_menu_bar(self):
-        """Crea la barra dei menu"""
+    def _create_menu_bar(self) -> None:
+        """Create the menu bar"""
         menubar = self.menuBar()
+        if menubar is None:
+            return
 
-        # Menu File
+        # File menu
         file_menu = menubar.addMenu('File')
+        if file_menu is None:
+            return
 
-        # Azione Impostazioni
+        # Settings action
         settings_action = QAction('Impostazioni', self)
         settings_action.triggered.connect(self.show_settings)
         file_menu.addAction(settings_action)
 
-        # Menu Info
+        # Info menu
         info_menu = menubar.addMenu('Info')
+        if info_menu is None:
+            return
 
-        # Azione Info
+        # About action
         about_action = QAction('Informazioni', self)
         about_action.triggered.connect(self.show_about_dialog)
         info_menu.addAction(about_action)
 
-    def create_main_screen(self):
-        """Crea la schermata principale"""
-        # Widget per la schermata principale
-        main_widget = QWidget()
+    def _create_header_logos(self) -> QHBoxLayout:
+        """Create the header with IGEA and BRT logos.
 
-        # Layout principale
-        main_layout = QVBoxLayout()
-        main_layout.setSpacing(10)  # Spazio ridotto tra elementi principali
-        main_layout.setContentsMargins(10, 20, 10, 10)  # Margine superiore per distanziare i loghi dal bordo
-        main_widget.setLayout(main_layout)
-
-        # === HEADER: Loghi ===
+        Returns:
+            QHBoxLayout: Layout containing logos and arrows
+        """
         header_layout = QHBoxLayout()
         header_layout.setAlignment(Qt.AlignCenter)
 
-        # Logo IGEA (sinistra)
+        # IGEA logo (left)
         igea_logo_label = QLabel()
         igea_logo_label.setAlignment(Qt.AlignCenter)
-        icon_path = Path(__file__).parent / "igea_logo.png"
-        igea_pixmap = QPixmap(str(icon_path))
+        igea_logo_path = Path(__file__).parent / FileSettings.LOGO_IGEA
+        igea_pixmap = QPixmap(str(igea_logo_path))
         if not igea_pixmap.isNull():
-            igea_logo_label.setPixmap(igea_pixmap.scaledToHeight(80, Qt.SmoothTransformation))
+            igea_logo_label.setPixmap(igea_pixmap.scaledToHeight(UIConstants.LOGO_HEIGHT, Qt.SmoothTransformation))
         header_layout.addWidget(igea_logo_label)
 
-        # Frecce centrali (HTML per controllare line-height)
+        # Center arrows (HTML to control line-height)
         arrows_label = QLabel('<div style="line-height: 80%;">→<br>←</div>')
         arrows_label.setAlignment(Qt.AlignCenter)
         arrows_font = QFont()
@@ -291,20 +715,25 @@ class BRTSpedizioniApp(QMainWindow):
         arrows_label.setStyleSheet("color: #666666; padding: 0px 20px;")
         header_layout.addWidget(arrows_label)
 
-        # Logo BRT (destra)
+        # BRT logo (right)
         brt_logo_label = QLabel()
         brt_logo_label.setAlignment(Qt.AlignCenter)
-        brt_logo_path = Path(__file__).parent / "Logo_BRT.svg.png"
+        brt_logo_path = Path(__file__).parent / FileSettings.LOGO_BRT
         if brt_logo_path.exists():
             brt_pixmap = QPixmap(str(brt_logo_path))
             if not brt_pixmap.isNull():
-                brt_logo_label.setPixmap(brt_pixmap.scaledToHeight(80, Qt.SmoothTransformation))
+                brt_logo_label.setPixmap(brt_pixmap.scaledToHeight(UIConstants.LOGO_HEIGHT, Qt.SmoothTransformation))
         header_layout.addWidget(brt_logo_label)
 
-        main_layout.addLayout(header_layout)
+        return header_layout
 
-        # === STEP 1: Caricamento file ===
-        step1_title = QLabel("STEP 1: Carica File CSV")
+    def _create_step1_file_loading(self, main_layout: QVBoxLayout) -> None:
+        """Create STEP 1: File loading section.
+
+        Args:
+            main_layout: Main layout to add this section to
+        """
+        step1_title = QLabel(Messages.SECTION_STEP1)
         step1_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 20px; margin-bottom: 8px;")
         main_layout.addWidget(step1_title)
 
@@ -312,38 +741,32 @@ class BRTSpedizioniApp(QMainWindow):
         step1_layout = QHBoxLayout()
         step1_layout.setContentsMargins(10, 10, 10, 15)
 
-        self.file_label = QLabel("Nessun file caricato")
+        self.file_label = QLabel(Messages.LABEL_NO_FILE)
         step1_layout.addWidget(self.file_label)
 
         step1_layout.addStretch()
 
-        load_btn = QPushButton("Carica file .csv")
+        load_btn = QPushButton(Messages.BTN_LOAD_CSV)
         load_btn.clicked.connect(self.load_csv)
         step1_layout.addWidget(load_btn)
 
         step1_group.setLayout(step1_layout)
         main_layout.addWidget(step1_group)
 
-        # Info label separato (fuori dal group box)
+        # Separate info label (outside the group box)
         self.info_label = QLabel("")
         self.info_label.setStyleSheet("color: green; font-weight: bold;")
         main_layout.addWidget(self.info_label)
 
-        # === STEP 2: Compilazione dati ===
-        step2_title = QLabel("STEP 2: Compila Dati Spedizione")
-        step2_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 0px; margin-bottom: 8px;")
-        main_layout.addWidget(step2_title)
+    def _create_recipient_column(self) -> QVBoxLayout:
+        """Create the left column with recipient data display.
 
-        step2_group = QGroupBox()
-        step2_layout = QVBoxLayout()
-
-        # Layout a 2 colonne per destinatario e dati spedizione
-        columns_layout = QHBoxLayout()
-
-        # === COLONNA SINISTRA: Destinatario ===
+        Returns:
+            QVBoxLayout: Layout containing recipient display area
+        """
         left_column = QVBoxLayout()
 
-        dest_title = QLabel("Destinatario (da CSV)")
+        dest_title = QLabel(Messages.LABEL_RECIPIENT)
         dest_title.setStyleSheet("font-weight: bold; margin-top: 10px; margin-bottom: 5px;")
         left_column.addWidget(dest_title)
 
@@ -361,47 +784,52 @@ class BRTSpedizioniApp(QMainWindow):
         dest_group.setLayout(dest_layout)
         left_column.addWidget(dest_group)
 
-        columns_layout.addLayout(left_column)
+        return left_column
 
-        # === COLONNA DESTRA: Dati Spedizione ===
+    def _create_shipment_column(self) -> QVBoxLayout:
+        """Create the right column with shipment data inputs.
+
+        Returns:
+            QVBoxLayout: Layout containing shipment input fields
+        """
         right_column = QVBoxLayout()
 
-        sped_title = QLabel("Dati Spedizione (da compilare)")
+        sped_title = QLabel(Messages.LABEL_SHIPMENT_DATA)
         sped_title.setStyleSheet("font-weight: bold; margin-top: 10px; margin-bottom: 5px;")
         right_column.addWidget(sped_title)
 
         sped_group = QGroupBox()
         sped_layout = QGridLayout()
 
-        # N. Colli
-        sped_layout.addWidget(QLabel("N. Colli:"), 0, 0)
+        # Number of packages
+        sped_layout.addWidget(QLabel(Messages.LABEL_NUM_PACKAGES), 0, 0)
         self.colli_input = QLineEdit(str(self.default_colli))
         self.colli_input.setMaximumWidth(100)
         self.colli_input.returnPressed.connect(lambda: self.peso_input.setFocus())
         sped_layout.addWidget(self.colli_input, 0, 1)
 
-        # Peso
-        sped_layout.addWidget(QLabel("Peso tot (kg):"), 1, 0)
+        # Weight
+        sped_layout.addWidget(QLabel(Messages.LABEL_TOTAL_WEIGHT), 1, 0)
         self.peso_input = QLineEdit(str(self.default_peso))
         self.peso_input.setMaximumWidth(100)
         self.peso_input.returnPressed.connect(self.save_and_next)
         sped_layout.addWidget(self.peso_input, 1, 1)
 
-        # Template rapidi
-        template_label = QLabel("Template rapidi:")
+        # Quick templates
+        template_label = QLabel(Messages.LABEL_QUICK_TEMPLATES)
         sped_layout.addWidget(template_label, 2, 0)
 
         template_row = QVBoxLayout()
 
-        btn1 = QPushButton("1 collo - 5kg")
+        btn1 = QPushButton(Messages.BTN_TEMPLATE_1)
         btn1.clicked.connect(lambda: self.apply_template(1, 5))
         template_row.addWidget(btn1)
 
-        btn2 = QPushButton("1 collo - 10kg")
+        btn2 = QPushButton(Messages.BTN_TEMPLATE_2)
         btn2.clicked.connect(lambda: self.apply_template(1, 10))
         template_row.addWidget(btn2)
 
-        btn3 = QPushButton("2 colli - 15kg")
+        btn3 = QPushButton(Messages.BTN_TEMPLATE_3)
         btn3.clicked.connect(lambda: self.apply_template(2, 15))
         template_row.addWidget(btn3)
 
@@ -410,12 +838,59 @@ class BRTSpedizioniApp(QMainWindow):
         sped_group.setLayout(sped_layout)
         right_column.addWidget(sped_group)
 
-        columns_layout.addLayout(right_column)
+        return right_column
 
+    def _create_navigation_buttons(self) -> QHBoxLayout:
+        """Create navigation buttons layout.
+
+        Returns:
+            QHBoxLayout: Layout containing all navigation buttons
+        """
+        nav_layout = QHBoxLayout()
+
+        self.prev_btn = QPushButton(Messages.BTN_PREVIOUS)
+        self.prev_btn.clicked.connect(self.previous_item)
+        self.prev_btn.setStyleSheet(self._get_button_style('plain'))
+        nav_layout.addWidget(self.prev_btn)
+
+        self.skip_btn = QPushButton(Messages.BTN_SKIP)
+        self.skip_btn.clicked.connect(self.skip_item)
+        self.skip_btn.setStyleSheet(self._get_button_style('plain'))
+        nav_layout.addWidget(self.skip_btn)
+
+        self.goto_skipped_btn = QPushButton(Messages.BTN_GOTO_SKIPPED)
+        self.goto_skipped_btn.clicked.connect(self.goto_next_skipped)
+        self.goto_skipped_btn.setStyleSheet(self._get_button_style('warning'))
+        nav_layout.addWidget(self.goto_skipped_btn)
+
+        self.save_next_btn = QPushButton(Messages.BTN_SAVE_AND_NEXT)
+        self.save_next_btn.clicked.connect(self.save_and_next_unified)
+        self.save_next_btn.setStyleSheet(self._get_button_style('primary'))
+        nav_layout.addWidget(self.save_next_btn)
+
+        return nav_layout
+
+    def _create_step2_data_entry(self, main_layout: QVBoxLayout) -> None:
+        """Create STEP 2: Data entry section.
+
+        Args:
+            main_layout: Main layout to add this section to
+        """
+        step2_title = QLabel(Messages.SECTION_STEP2)
+        step2_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 0px; margin-bottom: 8px;")
+        main_layout.addWidget(step2_title)
+
+        step2_group = QGroupBox()
+        step2_layout = QVBoxLayout()
+
+        # 2-column layout for recipient and shipment data
+        columns_layout = QHBoxLayout()
+        columns_layout.addLayout(self._create_recipient_column())
+        columns_layout.addLayout(self._create_shipment_column())
         step2_layout.addLayout(columns_layout)
 
         # Progress
-        self.progress_label = QLabel("0/0 (0%)")
+        self.progress_label = QLabel(Messages.LABEL_PROGRESS_DEFAULT)
         self.progress_label.setAlignment(Qt.AlignCenter)
         self.progress_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         step2_layout.addWidget(self.progress_label)
@@ -423,41 +898,24 @@ class BRTSpedizioniApp(QMainWindow):
         self.progress_bar = QProgressBar()
         step2_layout.addWidget(self.progress_bar)
 
-        # Riepilogo
+        # Summary
         self.summary_label = QLabel("")
         self.summary_label.setAlignment(Qt.AlignCenter)
         step2_layout.addWidget(self.summary_label)
 
-        # Bottoni navigazione
-        nav_layout = QHBoxLayout()
-
-        self.prev_btn = QPushButton("◀ Precedente")
-        self.prev_btn.clicked.connect(self.previous_item)
-        self.prev_btn.setStyleSheet("border: none; padding: 8px 15px; border-radius: 4px;")
-        nav_layout.addWidget(self.prev_btn)
-
-        self.skip_btn = QPushButton("Salta")
-        self.skip_btn.clicked.connect(self.skip_item)
-        self.skip_btn.setStyleSheet("border: none; padding: 8px 15px; border-radius: 4px;")
-        nav_layout.addWidget(self.skip_btn)
-
-        self.goto_skipped_btn = QPushButton("↻ Vai a Saltati")
-        self.goto_skipped_btn.clicked.connect(self.goto_next_skipped)
-        self.goto_skipped_btn.setStyleSheet("background-color: #FFA500; color: white; font-weight: bold; border: none; padding: 8px 15px; border-radius: 4px;")
-        nav_layout.addWidget(self.goto_skipped_btn)
-
-        self.save_next_btn = QPushButton("✓ SALVA E SUCCESSIVO ▶")
-        self.save_next_btn.clicked.connect(self.save_and_next_unified)
-        self.save_next_btn.setStyleSheet("background-color: #16FEBC; color: #333333; font-weight: bold; border: none; padding: 8px 15px; border-radius: 4px;")
-        nav_layout.addWidget(self.save_next_btn)
-
-        step2_layout.addLayout(nav_layout)
+        # Navigation buttons
+        step2_layout.addLayout(self._create_navigation_buttons())
 
         step2_group.setLayout(step2_layout)
         main_layout.addWidget(step2_group)
 
-        # === STEP 3: Esportazione ===
-        step3_title = QLabel("STEP 3: Genera CSV per BRT")
+    def _create_step3_export(self, main_layout: QVBoxLayout) -> None:
+        """Create STEP 3: Export section.
+
+        Args:
+            main_layout: Main layout to add this section to
+        """
+        step3_title = QLabel(Messages.SECTION_STEP3)
         step3_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 20px; margin-bottom: 8px;")
         main_layout.addWidget(step3_title)
 
@@ -465,28 +923,49 @@ class BRTSpedizioniApp(QMainWindow):
         step3_layout = QHBoxLayout()
         step3_layout.setContentsMargins(10, 10, 10, 15)
 
-        step3_layout.addStretch()  # Spazio per centrare il pulsante
+        step3_layout.addStretch()  # Space to center the button
 
-        self.export_btn = QPushButton("↑ Esporta CSV per BRT")
+        self.export_btn = QPushButton(Messages.BTN_EXPORT_CSV)
         self.export_btn.clicked.connect(self.export_brt_csv)
-        self.export_btn.setStyleSheet("background-color: #5F38E6; color: white; font-weight: bold; border: none; padding: 10px; border-radius: 4px;")  # Viola
+        self.export_btn.setStyleSheet(self._get_button_style('info'))
         step3_layout.addWidget(self.export_btn)
 
-        step3_layout.addStretch()  # Spazio per centrare il pulsante
+        step3_layout.addStretch()  # Space to center the button
 
         step3_group.setLayout(step3_layout)
         main_layout.addWidget(step3_group)
 
-        # Export label separato (fuori dal group box)
+        # Separate export label (outside the group box)
         self.export_label = QLabel("")
         self.export_label.setStyleSheet("color: green; font-weight: bold;")
         self.export_label.setWordWrap(True)
         main_layout.addWidget(self.export_label)
 
+    def _create_main_screen(self) -> QWidget:
+        """Create the main screen by composing all sections.
+
+        Returns:
+            QWidget: The complete main screen widget
+        """
+        # Widget for the main screen
+        main_widget = QWidget()
+
+        # Main layout
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(10)  # Reduced spacing between main elements
+        main_layout.setContentsMargins(10, 20, 10, 10)  # Top margin to distance logos from edge
+        main_widget.setLayout(main_layout)
+
+        # Add all sections
+        main_layout.addLayout(self._create_header_logos())
+        self._create_step1_file_loading(main_layout)
+        self._create_step2_data_entry(main_layout)
+        self._create_step3_export(main_layout)
+
         return main_widget
 
-    def create_settings_screen(self):
-        """Crea la schermata impostazioni"""
+    def _create_settings_screen(self) -> QWidget:
+        """Create the settings screen"""
         settings_widget = QWidget()
 
         layout = QVBoxLayout()
@@ -494,33 +973,33 @@ class BRTSpedizioniApp(QMainWindow):
         layout.setContentsMargins(50, 50, 50, 50)
         settings_widget.setLayout(layout)
 
-        # Titolo
-        title = QLabel("IMPOSTAZIONI")
+        # Title
+        title = QLabel(Messages.SETTINGS_TITLE)
         title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 10px;")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
-        # Descrizione
-        description = QLabel("Imposta i valori di default per il numero di colli e il peso delle spedizioni")
+        # Description
+        description = QLabel(Messages.SETTINGS_DESCRIPTION)
         description.setStyleSheet("font-size: 12px; color: #666666; margin-bottom: 20px;")
         description.setAlignment(Qt.AlignCenter)
         description.setWordWrap(True)
         layout.addWidget(description)
 
-        # Group box per valori di default
-        defaults_group = QGroupBox("Valori di Default")
+        # Group box for default values
+        defaults_group = QGroupBox(Messages.SETTINGS_GROUP_DEFAULTS)
         defaults_group.setStyleSheet("font-size: 14px; font-weight: bold;")
         defaults_layout = QGridLayout()
         defaults_layout.setSpacing(15)
 
-        # N. Colli default
-        defaults_layout.addWidget(QLabel("N. Colli di default:"), 0, 0)
+        # Default number of packages
+        defaults_layout.addWidget(QLabel(Messages.LABEL_DEFAULT_PACKAGES), 0, 0)
         self.settings_colli_input = QLineEdit(str(self.default_colli))
         self.settings_colli_input.setMaximumWidth(150)
         defaults_layout.addWidget(self.settings_colli_input, 0, 1)
 
-        # Peso default
-        defaults_layout.addWidget(QLabel("Peso di default (kg):"), 1, 0)
+        # Default weight
+        defaults_layout.addWidget(QLabel(Messages.LABEL_DEFAULT_WEIGHT), 1, 0)
         self.settings_peso_input = QLineEdit(str(self.default_peso))
         self.settings_peso_input.setMaximumWidth(150)
         defaults_layout.addWidget(self.settings_peso_input, 1, 1)
@@ -528,86 +1007,133 @@ class BRTSpedizioniApp(QMainWindow):
         defaults_group.setLayout(defaults_layout)
         layout.addWidget(defaults_group)
 
-        # Spazio
+        # Group box for BRT fixed fields
+        brt_group = QGroupBox(Messages.SETTINGS_GROUP_BRT)
+        brt_group.setStyleSheet("font-size: 14px; font-weight: bold;")
+        brt_layout = QGridLayout()
+        brt_layout.setSpacing(15)
+
+        # Customer code
+        brt_layout.addWidget(QLabel(Messages.LABEL_CUSTOMER_CODE), 0, 0)
+        self.settings_customer_code_input = QLineEdit(self.brt_customer_code)
+        self.settings_customer_code_input.setMaximumWidth(300)
+        brt_layout.addWidget(self.settings_customer_code_input, 0, 1)
+
+        # Alphabetic reference
+        brt_layout.addWidget(QLabel(Messages.LABEL_ALPHABETIC_REF), 1, 0)
+        self.settings_alphabetic_ref_input = QLineEdit(self.brt_alphabetic_ref)
+        self.settings_alphabetic_ref_input.setMaximumWidth(300)
+        brt_layout.addWidget(self.settings_alphabetic_ref_input, 1, 1)
+
+        # Goods type
+        brt_layout.addWidget(QLabel(Messages.LABEL_GOODS_TYPE), 2, 0)
+        self.settings_goods_type_input = QLineEdit(self.brt_goods_type)
+        self.settings_goods_type_input.setMaximumWidth(300)
+        brt_layout.addWidget(self.settings_goods_type_input, 2, 1)
+
+        # Tariff code
+        brt_layout.addWidget(QLabel(Messages.LABEL_TARIFF_CODE), 3, 0)
+        self.settings_tariff_code_input = QLineEdit(self.brt_tariff_code)
+        self.settings_tariff_code_input.setMaximumWidth(300)
+        brt_layout.addWidget(self.settings_tariff_code_input, 3, 1)
+
+        # Service type
+        brt_layout.addWidget(QLabel(Messages.LABEL_SERVICE_TYPE), 4, 0)
+        self.settings_service_type_input = QLineEdit(self.brt_service_type)
+        self.settings_service_type_input.setMaximumWidth(300)
+        brt_layout.addWidget(self.settings_service_type_input, 4, 1)
+
+        brt_group.setLayout(brt_layout)
+        layout.addWidget(brt_group)
+
+        # Spacer
         layout.addStretch()
 
-        # Bottoni
+        # Buttons
         buttons_layout = QHBoxLayout()
 
-        # Bottone Torna Indietro
-        back_btn = QPushButton("← Torna Indietro")
+        # Back button
+        back_btn = QPushButton(Messages.BTN_BACK)
         back_btn.clicked.connect(self.show_main_screen)
-        back_btn.setStyleSheet("background-color: #6c757d; color: white; font-weight: bold; border: none; padding: 10px 20px; border-radius: 4px;")
+        back_btn.setStyleSheet(self._get_button_style('secondary'))
         buttons_layout.addWidget(back_btn)
 
         buttons_layout.addStretch()
 
-        # Bottone Salva
-        save_btn = QPushButton("✓ Salva Impostazioni")
+        # Save button
+        save_btn = QPushButton(Messages.BTN_SAVE_SETTINGS)
         save_btn.clicked.connect(self.save_settings_and_return)
-        save_btn.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; border: none; padding: 10px 20px; border-radius: 4px;")
+        save_btn.setStyleSheet(self._get_button_style('success'))
         buttons_layout.addWidget(save_btn)
 
         layout.addLayout(buttons_layout)
 
         return settings_widget
 
-    def show_settings(self):
-        """Mostra la schermata impostazioni"""
-        # Aggiorna i valori negli input delle impostazioni
+    def show_settings(self) -> None:
+        """Show the settings screen"""
+        # Update the values in the settings inputs
         self.settings_colli_input.setText(str(self.default_colli))
         self.settings_peso_input.setText(str(self.default_peso))
+
+        # Update BRT fields
+        self.settings_customer_code_input.setText(self.brt_customer_code)
+        self.settings_alphabetic_ref_input.setText(self.brt_alphabetic_ref)
+        self.settings_goods_type_input.setText(self.brt_goods_type)
+        self.settings_tariff_code_input.setText(self.brt_tariff_code)
+        self.settings_service_type_input.setText(self.brt_service_type)
+
         self.stacked_widget.setCurrentWidget(self.settings_screen)
 
-    def show_main_screen(self):
-        """Mostra la schermata principale"""
+    def show_main_screen(self) -> None:
+        """Show the main screen"""
         self.stacked_widget.setCurrentWidget(self.main_screen)
 
-    def show_about_dialog(self):
-        """Mostra il dialog con le informazioni sull'applicazione"""
+    def show_about_dialog(self) -> None:
+        """Show the about dialog"""
         dialog = QDialog(self)
         dialog.setWindowTitle("Informazioni")
         dialog.setMinimumWidth(500)
 
-        # Layout principale
+        # Main Layout
         main_layout = QVBoxLayout()
         main_layout.setSpacing(20)
         main_layout.setContentsMargins(30, 30, 30, 30)
 
-        # Header con loghi e frecce
+        # Header with logos and arrows
         header_layout = QHBoxLayout()
         header_layout.setSpacing(20)
 
-        # Logo IGEA (sinistra)
+        # IGEA logo (left)
         igea_logo = QLabel()
-        igea_path = Path(__file__).parent / "igea_logo.png"
-        if igea_path.exists():
-            pixmap_igea = QPixmap(str(igea_path))
-            # Scala con altezza fissa di 60px, larghezza proporzionale
-            scaled_igea = pixmap_igea.scaledToHeight(60, Qt.SmoothTransformation)
+        igea_logo_path = Path(__file__).parent / FileSettings.LOGO_IGEA
+        if igea_logo_path.exists():
+            pixmap_igea = QPixmap(str(igea_logo_path))
+            # Scale with fixed height of 60px, proportional width
+            scaled_igea = pixmap_igea.scaledToHeight(UIConstants.LOGO_HEIGHT_DIALOG, Qt.SmoothTransformation)
             igea_logo.setPixmap(scaled_igea)
         header_layout.addWidget(igea_logo)
 
-        # Frecce al centro
+        # Arrows in the center
         arrows_label = QLabel("→\n←")
         arrows_label.setFont(QFont("Arial", 32))
         arrows_label.setAlignment(Qt.AlignCenter)
         arrows_label.setStyleSheet("color: #666666;")
         header_layout.addWidget(arrows_label)
 
-        # Logo BRT (destra)
+        # BRT logo (right)
         brt_logo = QLabel()
-        brt_path = Path(__file__).parent / "Logo_BRT.svg.png"
-        if brt_path.exists():
-            pixmap_brt = QPixmap(str(brt_path))
-            # Scala con altezza fissa di 60px, larghezza proporzionale
-            scaled_brt = pixmap_brt.scaledToHeight(60, Qt.SmoothTransformation)
+        brt_logo_path = Path(__file__).parent / FileSettings.LOGO_BRT
+        if brt_logo_path.exists():
+            pixmap_brt = QPixmap(str(brt_logo_path))
+            # Scale with fixed height of 60px, proportional width
+            scaled_brt = pixmap_brt.scaledToHeight(UIConstants.LOGO_HEIGHT_DIALOG, Qt.SmoothTransformation)
             brt_logo.setPixmap(scaled_brt)
         header_layout.addWidget(brt_logo)
 
         main_layout.addLayout(header_layout)
 
-        # Informazioni app
+        # App information
         info_text = f"""
 <div style='text-align: center;'>
 <h2>{__app_name__}</h2>
@@ -624,8 +1150,8 @@ class BRTSpedizioniApp(QMainWindow):
         info_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(info_label)
 
-        # Bottone OK
-        ok_button = QPushButton("OK")
+        # Ok button
+        ok_button = QPushButton(Messages.BTN_OK)
         ok_button.clicked.connect(dialog.accept)
         ok_button.setMinimumWidth(100)
 
@@ -637,206 +1163,210 @@ class BRTSpedizioniApp(QMainWindow):
 
         dialog.setLayout(main_layout)
 
-        # Imposta icona finestra se disponibile
-        if igea_path.exists():
-            dialog.setWindowIcon(QIcon(str(igea_path)))
+        # Set window icon if available
+        if igea_logo_path.exists():
+            dialog.setWindowIcon(QIcon(str(igea_logo_path)))
 
         dialog.exec_()
 
-    def save_settings_and_return(self):
-        """Salva le impostazioni e torna alla schermata principale"""
+    def save_settings_and_return(self) -> None:
+        """Save settings and return to main screen"""
         try:
-            # Valida input
+            # Validate input
             colli = int(self.settings_colli_input.text().strip())
             peso = float(self.settings_peso_input.text().strip().replace(',', '.'))
 
             if colli <= 0 or peso <= 0:
-                QMessageBox.warning(self, "Attenzione",
-                    "I valori devono essere maggiori di zero")
+                QMessageBox.warning(self, Messages.TITLE_WARNING,
+                    Messages.MSG_SETTINGS_POSITIVE)
                 return
 
-            # Salva i nuovi valori di default
+            # Save the new default values
             self.default_colli = colli
             self.default_peso = peso
 
-            # Salva su file
+            # Save BRT fields from UI
+            self.brt_customer_code = self.settings_customer_code_input.text().strip()
+            self.brt_alphabetic_ref = self.settings_alphabetic_ref_input.text().strip()
+            self.brt_goods_type = self.settings_goods_type_input.text().strip()
+            self.brt_tariff_code = self.settings_tariff_code_input.text().strip()
+            self.brt_service_type = self.settings_service_type_input.text().strip()
+
+            # Save to file (include BRT configurable fields)
             settings_data = {
                 'default_colli': self.default_colli,
-                'default_peso': self.default_peso
+                'default_peso': self.default_peso,
+                'brt_customer_code': self.brt_customer_code,
+                'brt_alphabetic_ref': self.brt_alphabetic_ref,
+                'brt_goods_type': self.brt_goods_type,
+                'brt_tariff_code': self.brt_tariff_code,
+                'brt_service_type': self.brt_service_type
             }
 
-            with open(self.settings_file, 'w') as f:
+            with open(str(self.settings_file), 'w', encoding='utf-8') as f:
                 json.dump(settings_data, f, indent=2)
 
-            QMessageBox.information(self, "Successo",
-                "Impostazioni salvate con successo!")
+            logger.info(f"Settings saved successfully: colli={colli}, peso={peso}")
 
-            # Torna alla schermata principale
+            QMessageBox.information(self, Messages.TITLE_SUCCESS,
+                Messages.MSG_SETTINGS_SAVED)
+
+            # Return to main screen
             self.show_main_screen()
 
-        except ValueError:
-            QMessageBox.warning(self, "Attenzione",
-                "Valori non validi. Inserire numeri validi.")
+        except ValueError as e:
+            logger.warning(f"Invalid input in settings: {e}")
+            QMessageBox.warning(self, Messages.TITLE_WARNING,
+                Messages.MSG_INVALID_SETTINGS)
 
-    def load_settings(self):
-        """Carica le impostazioni salvate"""
+    def load_settings(self) -> None:
+        """Load saved settings"""
         if not self.settings_file.exists():
+            logger.debug(f"Settings file {self.settings_file} not found, using default values")
             return
 
         try:
-            with open(self.settings_file, 'r') as f:
+            with open(str(self.settings_file), 'r', encoding='utf-8') as f:
                 settings_data = json.load(f)
 
+            # Load shipment defaults
             self.default_colli = settings_data.get('default_colli', 1)
             self.default_peso = settings_data.get('default_peso', 2)
 
-        except Exception as e:
-            print(f"Errore nel caricamento delle impostazioni: {e}")
+            # Load BRT configurable fields
+            self.brt_customer_code = settings_data.get('brt_customer_code', BRTDefaults.DEFAULT_CUSTOMER_CODE)
+            self.brt_alphabetic_ref = settings_data.get('brt_alphabetic_ref', BRTDefaults.DEFAULT_ALPHABETIC_REF)
+            self.brt_goods_type = settings_data.get('brt_goods_type', BRTDefaults.DEFAULT_GOODS_TYPE)
+            self.brt_tariff_code = settings_data.get('brt_tariff_code', BRTDefaults.DEFAULT_TARIFF_CODE)
+            self.brt_service_type = settings_data.get('brt_service_type', BRTDefaults.DEFAULT_SERVICE_TYPE)
 
-    def check_for_updates(self):
-        """Avvia il controllo aggiornamenti in background"""
+            logger.info(f"Settings loaded successfully from {self.settings_file}")
+
+        except Exception as e:
+            logger.error(f"Failed to load settings from {self.settings_file}: {e}", exc_info=True)
+            # Continue with default values - they're already set
+
+    def check_for_updates(self) -> None:
+        """Start update check in background"""
         self.update_checker = UpdateChecker(__version__)
         self.update_checker.update_available.connect(self.show_update_dialog)
         self.update_checker.start()
 
-    def show_update_dialog(self, new_version, release_url, download_url):
-        """Mostra il dialog di aggiornamento disponibile"""
+    def show_update_dialog(self, new_version: str, release_url: str, download_url: str) -> None:
+        """Show update available dialog"""
         msg = QMessageBox(self)
-        msg.setWindowTitle("Aggiornamento Disponibile")
+        msg.setWindowTitle(Messages.TITLE_UPDATE_AVAILABLE)
         msg.setIcon(QMessageBox.Information)
 
-        text = f"""
-<div style='text-align: center;'>
-<h3>Nuova versione disponibile!</h3>
-<p>È disponibile la versione <b>{new_version}</b></p>
-<p>Versione attuale: <b>{__version__}</b></p>
-<br>
-<p>Vuoi scaricare l'aggiornamento?</p>
-</div>
-        """
+        text = Messages.format(Messages.MSG_UPDATE_AVAILABLE,
+                               new_version=new_version,
+                               current_version=__version__)
         msg.setText(text)
         msg.setTextFormat(Qt.RichText)
 
-        # Bottoni
-        download_btn = msg.addButton("Scarica Ora", QMessageBox.AcceptRole)
-        later_btn = msg.addButton("Ricordamelo dopo", QMessageBox.RejectRole)
+        # Buttons
+        download_btn = msg.addButton(Messages.BTN_DOWNLOAD_NOW, QMessageBox.AcceptRole)
+        later_btn = msg.addButton(Messages.BTN_REMIND_LATER, QMessageBox.RejectRole)
 
-        # Imposta icona personalizzata
-        icon_path = Path(__file__).parent / "igea_logo.png"
-        if icon_path.exists():
-            msg.setWindowIcon(QIcon(str(icon_path)))
+        # Set custom icon
+        igea_icon_path = Path(__file__).parent / FileSettings.LOGO_IGEA
+        if igea_icon_path.exists():
+            msg.setWindowIcon(QIcon(str(igea_icon_path)))
 
         msg.exec_()
 
-        # Se ha cliccato su Scarica
+        # If user clicked Download
         if msg.clickedButton() == download_btn:
             if download_url:
                 self.start_download(download_url)
             else:
-                # Fallback: apri la pagina GitHub
+                # Fallback: open GitHub page
                 webbrowser.open(release_url)
 
-    def start_download(self, download_url):
-        """Avvia il download dell'aggiornamento"""
-        # Determina il nome del file dall'URL
+    def start_download(self, download_url: str) -> None:
+        """Start downloading the update"""
+        # Determine the filename from the URL
         filename = download_url.split('/')[-1]
 
-        # Percorso dove scaricare (cartella parent dell'app per evitare conflitti)
+        # Path where to download (parent folder of app to avoid conflicts)
         if getattr(sys, 'frozen', False):
-            # Se è un eseguibile PyInstaller (--onedir su Windows)
+            # If it's a PyInstaller executable (--onedir on Windows)
             # sys.executable = Desktop/Gestione_Spedizioni_BRT/Gestione_Spedizioni_BRT.exe
-            # Dobbiamo scaricare nel Desktop (parent della cartella app)
-            app_dir = Path(sys.executable).parent.parent
+            # We must download to Desktop (parent of the app folder)
+            download_dir = Path(sys.executable).parent.parent
         else:
-            # Se è uno script Python
-            app_dir = Path(__file__).parent
+            # If it's a Python script
+            download_dir = Path(__file__).parent
 
-        # Crea dialog con progress bar
-        self.download_dialog = QMessageBox(self)
-        self.download_dialog.setWindowTitle("Download in corso")
-        self.download_dialog.setText(f"Download di {filename} in corso...\n\nL'applicazione verrà chiusa e aggiornata automaticamente.")
-        self.download_dialog.setStandardButtons(QMessageBox.NoButton)
+        # Create custom download dialog with progress bar
+        self.download_dialog = DownloadDialog(self, filename)
 
-        # Aggiungi progress bar al dialog
-        self.download_progress = QProgressBar()
-        self.download_progress.setMinimum(0)
-        self.download_progress.setMaximum(100)
-        self.download_progress.setValue(0)
-
-        # Layout custom per il dialog
-        layout = self.download_dialog.layout()
-        layout.addWidget(self.download_progress, layout.rowCount(), 0, 1, layout.columnCount())
-
-        # Avvia il downloader
-        self.downloader = UpdateDownloader(download_url, filename, str(app_dir))
-        self.downloader.download_progress.connect(self.on_download_progress)
+        # Start the downloader
+        self.downloader = UpdateDownloader(download_url, filename, str(download_dir))
+        self.downloader.download_progress.connect(self.download_dialog.update_progress)
         self.downloader.download_complete.connect(self.on_download_complete)
         self.downloader.download_failed.connect(self.on_download_failed)
         self.downloader.start()
 
-        # Mostra il dialog
+        # Show the dialog
         self.download_dialog.show()
 
-    def on_download_progress(self, progress):
-        """Aggiorna la progress bar del download"""
-        self.download_progress.setValue(progress)
-
-    def on_download_complete(self, file_path):
-        """Download completato - installa e riavvia"""
+    def on_download_complete(self, file_path: str) -> None:
+        """Download completed - install and restart"""
         self.download_dialog.close()
 
         try:
             self.install_update(file_path)
         except Exception as e:
-            QMessageBox.critical(self, "Errore Installazione",
-                f"Impossibile installare l'aggiornamento:\n\n{e}\n\nIl file è stato salvato in:\n{file_path}")
+            QMessageBox.critical(self, Messages.TITLE_INSTALL_ERROR,
+                Messages.format(Messages.MSG_UPDATE_INSTALL_ERROR, error=e, path=file_path))
 
-    def install_update(self, downloaded_file):
-        """Installa l'aggiornamento e riavvia l'applicazione"""
+    def install_update(self, downloaded_file: str) -> None:
+        """Install the update and restart the application"""
         downloaded_path = Path(downloaded_file)
         system = platform.system()
 
         if getattr(sys, 'frozen', False):
-            # Eseguibile PyInstaller
+            # PyInstaller executable
             current_exe = Path(sys.executable)
             app_dir = current_exe.parent
         else:
-            # Script Python (modalità sviluppo)
+            # Python script (development mode)
             current_exe = Path(__file__)
             app_dir = current_exe.parent
 
         if system == 'Windows':
-            # Windows: sostituisci .exe
+            # Windows: replace .exe
             self.install_windows_update(downloaded_path, current_exe, app_dir)
         elif system == 'Darwin':
-            # macOS: estrai .zip e sostituisci .app
+            # macOS: extract .zip and replace .app
             self.install_macos_update(downloaded_path, current_exe, app_dir)
 
-    def install_windows_update(self, downloaded_path, current_exe, app_dir):
-        """Installa aggiornamento su Windows"""
-        # Determina la cartella dell'app corrente e la parent
+    def install_windows_update(self, downloaded_path: Path, current_exe: Path, app_dir: Path) -> None:
+        """Install update on Windows"""
+        # Determine current app folder and parent
         if getattr(sys, 'frozen', False):
-            # Se siamo nell'eseguibile PyInstaller (modalità --onedir)
-            # sys.executable punta a Gestione_Spedizioni_BRT/Gestione_Spedizioni_BRT.exe
+            # If we're in PyInstaller executable (--onedir mode)
+            # sys.executable points to Gestione_Spedizioni_BRT/Gestione_Spedizioni_BRT.exe
             current_app_folder = current_exe.parent
             parent_dir = current_app_folder.parent
         else:
-            # Modalità sviluppo
+            # Development mode
             current_app_folder = app_dir / "Gestione_Spedizioni_BRT"
             parent_dir = app_dir
 
-        # Estrai il contenuto dello zip nella cartella parent
-        extract_dir = parent_dir / "temp_update"
+        # Extract zip content to parent folder
+        extract_dir = parent_dir / FileSettings.TEMP_UPDATE_DIR
         extract_dir.mkdir(exist_ok=True)
 
         with zipfile.ZipFile(downloaded_path, 'r') as zip_ref:
             zip_ref.extractall(extract_dir)
 
-        # Trova la cartella dell'applicazione nel contenuto estratto
+        # Find the application folder in extracted content
         new_app_folder = None
         for item in extract_dir.iterdir():
             if item.is_dir():
-                # Verifica che contenga un exe
+                # Verify it contains an exe
                 exe_files = list(item.glob("*.exe"))
                 if exe_files:
                     new_app_folder = item
@@ -845,11 +1375,11 @@ class BRTSpedizioniApp(QMainWindow):
         if not new_app_folder:
             raise Exception("Cartella applicazione non trovata nell'archivio")
 
-        # Nome per il backup
+        # Name for backup
         backup_folder = parent_dir / (current_app_folder.name + "_old")
 
-        # Crea script batch per sostituire la cartella dopo la chiusura
-        update_script = parent_dir / "update_brt.bat"
+        # Create batch script to replace folder after closing
+        update_script = parent_dir / FileSettings.UPDATE_SCRIPT_WIN
 
         script_content = f"""@echo off
 echo Attendere chiusura applicazione...
@@ -894,25 +1424,25 @@ if exist "{current_app_folder}\\{current_exe.name}" (
 del "%~f0"
 """
 
-        with open(update_script, 'w') as f:
+        with open(str(update_script), 'w', encoding='utf-8') as f:
             f.write(script_content)
 
-        # Avvia lo script e chiudi l'applicazione
+        # Start the script and close the application
         subprocess.Popen(['cmd', '/c', str(update_script)],
                         creationflags=subprocess.CREATE_NO_WINDOW)
 
         QApplication.quit()
 
-    def install_macos_update(self, downloaded_path, current_exe, app_dir):
-        """Installa aggiornamento su macOS"""
-        # Estrai il contenuto dello zip
-        extract_dir = app_dir / "temp_update"
+    def install_macos_update(self, downloaded_path: Path, current_exe: Path, app_dir: Path) -> None:
+        """Install update on macOS"""
+        # Extract zip content
+        extract_dir = app_dir / FileSettings.TEMP_UPDATE_DIR
         extract_dir.mkdir(exist_ok=True)
 
-        with zipfile.ZipFile(downloaded_path, 'r') as zip_ref:
-            zip_ref.extractall(extract_dir)
+        with zipfile.ZipFile(str(downloaded_path), 'r') as zip_ref:
+            zip_ref.extractall(str(extract_dir))
 
-        # Trova la nuova app nel contenuto estratto
+        # Find new app in extracted content
         new_app = None
         for item in extract_dir.iterdir():
             if item.suffix == '.app':
@@ -922,16 +1452,16 @@ del "%~f0"
         if not new_app:
             raise Exception("File .app non trovato nell'archivio")
 
-        # Determina il percorso dell'app corrente
+        # Determine current app path
         if getattr(sys, 'frozen', False):
-            # Se siamo nell'app bundle (.app/Contents/MacOS/executable)
+            # If we're in app bundle (.app/Contents/MacOS/executable)
             current_app = current_exe.parent.parent.parent
         else:
-            # Modalità sviluppo
+            # Development mode
             current_app = app_dir / "brt_app_pyqt5.app"
 
-        # Crea script shell per sostituire l'app dopo la chiusura
-        update_script = app_dir / "update_brt.sh"
+        # Create shell script to replace app after closing
+        update_script = app_dir / FileSettings.UPDATE_SCRIPT_MAC
 
         script_content = f"""#!/bin/bash
 sleep 2
@@ -943,163 +1473,254 @@ rm -f "{downloaded_path}"
 rm -f "$0"
 """
 
-        with open(update_script, 'w') as f:
+        with open(str(update_script), 'w', encoding='utf-8') as f:
             f.write(script_content)
 
-        os.chmod(update_script, 0o755)
+        os.chmod(str(update_script), 0o755)
 
-        # Avvia lo script e chiudi l'applicazione
+        # Start the script and close the application
         subprocess.Popen(['/bin/bash', str(update_script)])
 
         QApplication.quit()
 
-    def on_download_failed(self, error_msg):
-        """Download fallito"""
+    def on_download_failed(self, error_msg: str) -> None:
+        """Download failed"""
         self.download_dialog.close()
 
-        QMessageBox.critical(self, "Errore Download",
-            f"Impossibile scaricare l'aggiornamento:\n\n{error_msg}")
+        QMessageBox.critical(self, Messages.TITLE_DOWNLOAD_ERROR,
+            Messages.format(Messages.MSG_UPDATE_DOWNLOAD_ERROR, error=error_msg))
 
 
-    def apply_template(self, colli, peso):
-        """Applica template rapido"""
+    def apply_template(self, colli: int, peso: int) -> None:
+        """Apply quick template"""
         self.colli_input.setText(str(colli))
         self.peso_input.setText(str(peso))
 
-    def load_csv(self):
-        """Carica e processa il file CSV"""
+    def load_csv(self) -> None:
+        """Load and process the CSV file"""
 
+        default_dir = Path.home() / "Documents"
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Seleziona LISTADDT.csv",
-            str(Path.home() / "Documents"),
-            "CSV files (*.csv);;All files (*.*)"
+            Messages.FILE_DIALOG_TITLE_LOAD,
+            str(default_dir),
+            Messages.FILE_DIALOG_FILTER
         )
 
         if not file_path:
             return
 
+        csv_path = Path(file_path)
+
         try:
-            # Leggi CSV forzando le colonne di testo come stringhe
-            # SpedLocalita2 (telefono) e SpedCAP devono essere stringhe per evitare conversione in float
-            df = pd.read_csv(file_path, sep=';', encoding='utf-8', dtype={
-                'SpedLocalita2': str,
-                'SpedCAP': str
+            # Read CSV forcing text columns as strings
+            # SpedLocalita2 (phone) and SpedCAP must be strings to avoid float conversion
+            df = pd.read_csv(str(csv_path), sep=';', encoding='utf-8', dtype={
+                CSVColumns.INPUT_TELEFONO: str,
+                CSVColumns.INPUT_CAP: str
             })
 
-            # Verifica colonne necessarie
-            required_cols = ['RegisNumero', 'SpedRagSoc1', 'SpedIndirizzo',
-                             'SpedLocalita', 'SpedLocalita2', 'SpedCAP',
-                             'SpedProvincia', 'AccompCodPorto']
+            # Verify required columns
+            required_cols = CSVColumns.get_required_input_columns()
 
             missing_cols = [col for col in required_cols if col not in df.columns]
             if missing_cols:
-                QMessageBox.critical(self, "Errore",
-                    f"Colonne mancanti nel CSV:\n{', '.join(missing_cols)}")
+                QMessageBox.critical(self, Messages.TITLE_ERROR,
+                    Messages.format(Messages.MSG_MISSING_COLUMNS, columns=', '.join(missing_cols)))
                 return
 
-            # Seleziona solo le colonne necessarie
+            # Select only required columns
             df = df[required_cols].copy()
 
-            # Assicurati che SpedLocalita2 e SpedCAP siano stringhe pulite (rimuovi NaN)
-            df['SpedLocalita2'] = df['SpedLocalita2'].fillna('').astype(str)
-            df['SpedCAP'] = df['SpedCAP'].fillna('').astype(str)
+            # Ensure phone and CAP are clean strings (remove NaN)
+            df[CSVColumns.INPUT_TELEFONO] = df[CSVColumns.INPUT_TELEFONO].fillna('').astype(str)
+            df[CSVColumns.INPUT_CAP] = df[CSVColumns.INPUT_CAP].fillna('').astype(str)
 
-            # Rimuovi duplicati basati su RegisNumero
-            df_unique = df.drop_duplicates(subset=['RegisNumero'], keep='first')
+            # Remove duplicates based on registration number
+            df_unique = df.drop_duplicates(subset=[CSVColumns.INPUT_NUMERO], keep='first')
 
-            # Rinomina colonne secondo mapping BRT
-            df_unique = df_unique.rename(columns={
-                'RegisNumero': 'VABNSP',
-                'SpedRagSoc1': 'VABRSD',
-                'SpedIndirizzo': 'VABIND',
-                'SpedLocalita': 'VABLOD',
-                'SpedLocalita2': 'VABTRC',
-                'SpedCAP': 'VABCAD',
-                'SpedProvincia': 'VABPRD',
-                'AccompCodPorto': 'VABCBO'
-            })
+            # Rename columns according to BRT mapping
+            df_unique = df_unique.rename(columns=CSVColumns.get_column_mapping())
 
-            # Duplica VABNSP per VABRMN
-            df_unique['VABRMN'] = df_unique['VABNSP']
+            # Duplicate shipment number for sender reference
+            df_unique[CSVColumns.OUTPUT_RIF_MITTENTE] = df_unique[CSVColumns.OUTPUT_NUM_SPEDIZIONE]
 
-            # VABCEL deve contenere SpedLocalita2 (già mappata in VABTRC)
-            df_unique['VABCEL'] = df_unique['VABTRC']
+            # Mobile must contain phone (already mapped)
+            df_unique[CSVColumns.OUTPUT_CELLULARE] = df_unique[CSVColumns.OUTPUT_TELEFONO_REF]
 
-            # Aggiungi colonne per dati da compilare
-            df_unique['VABNCL'] = ''
-            df_unique['VABPKB'] = ''
+            # Add columns for data to be filled
+            df_unique[CSVColumns.OUTPUT_NUM_COLLI] = RecordStatus.EMPTY.value
+            df_unique[CSVColumns.OUTPUT_PESO_KG] = RecordStatus.EMPTY.value
 
-            # Aggiungi campi fissi
-            for campo, valore in self.CAMPI_FISSI.items():
-                df_unique[campo] = valore
+            # Add fixed fields (use configurable values)
+            df_unique[CSVColumns.OUTPUT_ABBUONO_TB] = BRTDefaults.DEFAULT_ABBUONO
+            df_unique[CSVColumns.OUTPUT_COD_CLIENTE] = self.brt_customer_code
+            df_unique[CSVColumns.OUTPUT_NATURA_SPEDIZIONE] = self.brt_goods_type
+            df_unique[CSVColumns.OUTPUT_RIF_ALFABETICO] = self.brt_alphabetic_ref
+            df_unique[CSVColumns.OUTPUT_COD_TARIFFA] = self.brt_tariff_code
+            df_unique[CSVColumns.OUTPUT_NAZIONE_DEST] = BRTDefaults.DEFAULT_COUNTRY_DEST
+            df_unique[CSVColumns.OUTPUT_TIPO_SERVIZIO] = self.brt_service_type
 
-            # Salva dataframe
+            # Save dataframe
             self.df_spedizioni = df_unique
             self.current_index = 0
 
-            # Elimina JSON salvato (nuovo file = nuova sessione)
+            # Invalidate cache for new DataFrame
+            self._invalidate_cache()
+
+            # Delete saved JSON (new file = new session)
             if self.save_file.exists():
                 self.save_file.unlink()
 
-            # Aggiorna interfaccia
+            # Update interface
             num_rows = len(self.df_spedizioni)
             num_orig = len(df)
             duplicates = num_orig - num_rows
 
-            self.file_label.setText(f"✓ {Path(file_path).name}")
+            self.file_label.setText(Messages.format(Messages.LABEL_FILE_LOADED, filename=csv_path.name))
             self.info_label.setText(
-                f"✓ {num_rows} spedizioni caricate ({duplicates} duplicati rimossi)"
+                Messages.format(Messages.LABEL_SHIPMENTS_LOADED, count=num_rows, duplicates=duplicates)
             )
 
-            # Mostra primo record
+            # Show first record
             self.show_current_record()
 
-            QMessageBox.information(self, "Successo",
-                f"File caricato con successo!\n\n"
-                f"Spedizioni uniche: {num_rows}\n"
-                f"Duplicati rimossi: {duplicates}")
+            logger.info(f"Successfully loaded CSV file with {num_rows} unique shipments ({duplicates} duplicates removed)")
+
+            QMessageBox.information(self, Messages.TITLE_SUCCESS,
+                Messages.format(Messages.MSG_FILE_LOADED, count=num_rows, duplicates=duplicates))
 
         except Exception as e:
-            QMessageBox.critical(self, "Errore",
-                f"Errore nel caricamento del file:\n{str(e)}")
+            logger.error(f"Failed to load CSV file {csv_path}: {e}", exc_info=True)
+            QMessageBox.critical(self, Messages.TITLE_ERROR,
+                Messages.format(Messages.MSG_FILE_LOAD_ERROR, error=str(e)))
 
-    def show_current_record(self):
-        """Mostra il record corrente"""
+    def _validate_shipment_data(self) -> Optional[Tuple[int, float]]:
+        """Validate colli and peso input fields.
 
-        if self.df_spedizioni is None or len(self.df_spedizioni) == 0:
+        Returns:
+            Optional[Tuple[int, float]]: (colli, peso) if valid, None if invalid
+        """
+        try:
+            colli = self.colli_input.text().strip()
+            peso = self.peso_input.text().strip()
+
+            if not colli or not peso:
+                QMessageBox.warning(self, Messages.TITLE_WARNING,
+                    Messages.MSG_EMPTY_FIELDS)
+                return None
+
+            # Convert and validate
+            colli_int = int(colli)
+            peso_float = float(peso.replace(',', '.'))
+
+            if colli_int <= 0 or peso_float <= 0:
+                QMessageBox.warning(self, Messages.TITLE_WARNING,
+                    Messages.MSG_POSITIVE_VALUES)
+                return None
+
+            return (colli_int, peso_float)
+
+        except ValueError:
+            QMessageBox.warning(self, Messages.TITLE_WARNING,
+                Messages.MSG_INVALID_VALUES)
+            return None
+
+    def _invalidate_cache(self) -> None:
+        """Mark the cache as dirty to force recalculation on next access."""
+        self._cache_dirty = True
+
+    def _update_cache(self) -> None:
+        """Update cached DataFrame counts if cache is dirty."""
+        if self.df_spedizioni is None or not self._cache_dirty:
             return
 
-        # IMPORTANTE: Verifica che l'indice sia valido
-        if self.current_index >= len(self.df_spedizioni):
-            self.current_index = len(self.df_spedizioni) - 1
-            return
+        # Calculate all counts once
+        self._cache_total = len(self.df_spedizioni)
 
-        # Ottieni record corrente
-        record = self.df_spedizioni.iloc[self.current_index]
-
-        # Aggiorna dati destinatario (usa HTML per formattazione con sfondo colorato)
-        dest_info = (
-            f"<div style='font-family: {MONOSPACE_FONT}; font-size: 10pt;'>"
-            f"N. Spedizione: {record['VABNSP']}<br>"
-            f"Destinatario:  {record['VABRSD']}<br>"
-            f"Indirizzo:     {record['VABIND']}<br>"
-            f"CAP:           {record['VABCAD']}    Città: {record['VABLOD']}<br>"
-            f"Provincia:     {record['VABPRD']}<br>"
-            f"Telefono:      {record['VABTRC']}"
+        # Count completed records (not empty and not SKIP)
+        self._cache_completed = int(
+            ((self.df_spedizioni[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.EMPTY.value) &
+             (self.df_spedizioni[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.SKIP.value)).sum()
         )
 
-        # Aggiungi dati salvati se presenti con sfondo colorato
-        if record['VABNCL'] and record['VABNCL'] != '' and record['VABNCL'] != 'SKIP':
+        # Count skipped records
+        self._cache_skipped = int(
+            (self.df_spedizioni[CSVColumns.OUTPUT_NUM_COLLI] == RecordStatus.SKIP.value).sum()
+        )
+
+        # Calculate empty records
+        self._cache_empty = self._cache_total - self._cache_completed - self._cache_skipped
+
+        # Mark cache as clean
+        self._cache_dirty = False
+
+    def _get_button_style(self, style_type: str) -> str:
+        """Get button style by type.
+
+        Args:
+            style_type: Type of button style. Options:
+                - 'primary': Primary action button (green/teal)
+                - 'danger': Danger/final action button (red)
+                - 'warning': Warning button (orange)
+                - 'info': Info button (purple)
+                - 'secondary': Secondary action button (gray)
+                - 'disabled': Disabled button (light gray)
+                - 'success': Success button (green)
+
+        Returns:
+            str: CSS stylesheet string for the button
+        """
+        # Base style for all buttons
+        base_style = "border: none; border-radius: 4px;"
+
+        # Style configurations
+        styles = {
+            'primary': f"background-color: {Colors.PRIMARY}; color: {Colors.TEXT_BLACK}; font-weight: bold; {base_style} padding: {UIConstants.BUTTON_PADDING_NORMAL};",
+            'danger': f"background-color: {Colors.DANGER}; color: {Colors.TEXT_WHITE}; font-weight: bold; {base_style} padding: {UIConstants.BUTTON_PADDING_NORMAL};",
+            'warning': f"background-color: {Colors.WARNING}; color: {Colors.TEXT_WHITE}; font-weight: bold; {base_style} padding: {UIConstants.BUTTON_PADDING_NORMAL};",
+            'info': f"background-color: {Colors.INFO}; color: {Colors.TEXT_WHITE}; font-weight: bold; {base_style} padding: {UIConstants.BUTTON_PADDING_EXTRA};",
+            'secondary': f"background-color: {Colors.SECONDARY}; color: {Colors.TEXT_WHITE}; font-weight: bold; {base_style} padding: {UIConstants.BUTTON_PADDING_LARGE};",
+            'disabled': f"background-color: {Colors.DISABLED}; color: {Colors.DISABLED_TEXT}; {base_style} padding: {UIConstants.BUTTON_PADDING_NORMAL};",
+            'disabled_export': f"background-color: {Colors.DISABLED}; color: {Colors.DISABLED_TEXT}; {base_style} padding: {UIConstants.BUTTON_PADDING_EXTRA};",
+            'success': f"background-color: {Colors.SUCCESS}; color: {Colors.TEXT_WHITE}; font-weight: bold; {base_style} padding: {UIConstants.BUTTON_PADDING_LARGE};",
+            'plain': f"{base_style} padding: {UIConstants.BUTTON_PADDING_NORMAL};"
+        }
+
+        return styles.get(style_type, styles['plain'])
+
+    def _format_recipient_info(self, record: pd.Series) -> str:
+        """Format recipient information as HTML.
+
+        Args:
+            record: DataFrame row containing shipment data
+
+        Returns:
+            str: HTML formatted recipient information
+        """
+        dest_info = (
+            f"<div style='font-family: {MONOSPACE_FONT}; font-size: 10pt;'>"
+            f"N. Spedizione: {record[CSVColumns.OUTPUT_NUM_SPEDIZIONE]}<br>"
+            f"Destinatario:  {record[CSVColumns.OUTPUT_RAGIONE_SOCIALE]}<br>"
+            f"Indirizzo:     {record[CSVColumns.OUTPUT_INDIRIZZO]}<br>"
+            f"CAP:           {record[CSVColumns.OUTPUT_CAP]}    Città: {record[CSVColumns.OUTPUT_LOCALITA]}<br>"
+            f"Provincia:     {record[CSVColumns.OUTPUT_PROVINCIA]}<br>"
+            f"Telefono:      {record[CSVColumns.OUTPUT_TELEFONO_REF]}"
+        )
+
+        # Add saved data if present with colored background
+        if (record[CSVColumns.OUTPUT_NUM_COLLI] and  # type: ignore
+            record[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.EMPTY.value and  # type: ignore
+            record[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.SKIP.value):  # type: ignore
             dest_info += (
                 f"<br><br>"
-                f"Colli: {record['VABNCL']}<br>"
-                f"Peso: {record['VABPKB']} kg<br>"
-                f"<div style='background-color: #28a745; color: white; padding: 5px; margin-top: 5px; font-weight: bold;'>"
+                f"Colli: {record[CSVColumns.OUTPUT_NUM_COLLI]}<br>"
+                f"Peso: {record[CSVColumns.OUTPUT_PESO_KG]} kg<br>"
+                f"<div style='background-color: {Colors.SUCCESS}; color: white; padding: 5px; margin-top: 5px; font-weight: bold;'>"
                 f"✓ SALVATO"
                 f"</div>"
             )
-        elif record['VABNCL'] == 'SKIP':
+        elif record[CSVColumns.OUTPUT_NUM_COLLI] == RecordStatus.SKIP.value:  # type: ignore
             dest_info += (
                 f"<br><br>"
                 f"<div style='background-color: #dc3545; color: white; padding: 5px; margin-top: 5px; font-weight: bold;'>"
@@ -1108,368 +1729,395 @@ rm -f "$0"
             )
 
         dest_info += "</div>"
-        self.dest_text.setHtml(dest_info)
+        return dest_info
 
-        # Carica dati spedizione se già compilati (escludi SKIP)
-        if record['VABNCL'] and record['VABNCL'] != 'SKIP':
-            self.colli_input.setText(str(record['VABNCL']))
+    def _update_input_fields(self, record: pd.Series) -> None:
+        """Update input fields with record data or defaults.
+
+        Args:
+            record: DataFrame row containing shipment data
+        """
+        # Load shipment data if already filled (exclude SKIP)
+        if (record[CSVColumns.OUTPUT_NUM_COLLI] and  # type: ignore
+            record[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.SKIP.value):  # type: ignore
+            self.colli_input.setText(str(record[CSVColumns.OUTPUT_NUM_COLLI]))
         else:
             self.colli_input.setText(str(self.default_colli))
 
-        if record['VABPKB'] and record['VABPKB'] != 'SKIP':
-            self.peso_input.setText(str(record['VABPKB']))
+        if (record[CSVColumns.OUTPUT_PESO_KG] and  # type: ignore
+            record[CSVColumns.OUTPUT_PESO_KG] != RecordStatus.SKIP.value):  # type: ignore
+            self.peso_input.setText(str(record[CSVColumns.OUTPUT_PESO_KG]))
         else:
             self.peso_input.setText(str(self.default_peso))
 
-        # Aggiorna progress - conta solo record REALMENTE compilati (no vuoti, no SKIP)
-        total = len(self.df_spedizioni)
-        completed = int(((self.df_spedizioni['VABNCL'] != '') &
-                         (self.df_spedizioni['VABNCL'] != 'SKIP')).sum())
+    def _update_progress_display(self) -> None:
+        """Update progress bar and summary labels based on cached data."""
+        # Update cache if needed
+        self._update_cache()
+
+        # Use cached values for progress calculation
+        total = self._cache_total
+        completed = self._cache_completed
+        skipped = self._cache_skipped
+        empty = self._cache_empty
+
         progress_pct = int((completed / total) * 100) if total > 0 else 0
 
-        self.progress_label.setText(f"Cliente {self.current_index + 1}/{total} ({progress_pct}%)")
+        self.progress_label.setText(Messages.format(Messages.LABEL_PROGRESS,
+                                                     current=self.current_index + 1,
+                                                     total=total,
+                                                     percent=progress_pct))
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(completed)
 
-        # Aggiorna riepilogo
-        skipped = int((self.df_spedizioni['VABNCL'] == 'SKIP').sum())
-        empty = total - completed - skipped
-
         if empty == 0 and skipped == 0:
-            # Tutti i record sono completati
+            # All records are completed
             self.summary_label.setText(
-                f"<span style='background-color: #28a745; color: white; padding: 5px 10px; font-weight: bold; border-radius: 3px;'>✓ COMPLETO - Tutti i {total} record compilati!</span>"
+                Messages.format(Messages.LABEL_SUMMARY_COMPLETE, total=total)
             )
         else:
             self.summary_label.setText(
-                f"COMPLETATI: {completed} ✓  |  DA FARE: {empty}  |  SALTATI: {skipped}"
+                Messages.format(Messages.LABEL_SUMMARY, completed=completed, empty=empty, skipped=skipped)
             )
 
-        # Abilita/disabilita bottoni in base alla posizione
-        self.update_navigation_buttons()
-
-    def update_navigation_buttons(self):
-        """Aggiorna lo stato dei bottoni di navigazione"""
+    def show_current_record(self) -> None:
+        """Show the current record by updating all UI components."""
 
         if self.df_spedizioni is None or len(self.df_spedizioni) == 0:
             return
 
-        total = len(self.df_spedizioni)
-        is_last = self.current_index >= total - 1
+        # IMPORTANT: Verify that the index is valid
+        if self.current_index >= len(self.df_spedizioni):  # type: ignore
+            self.current_index = len(self.df_spedizioni) - 1
+            return
 
-        # Verifica se il record corrente è già salvato
-        current_record = self.df_spedizioni.iloc[self.current_index]
-        current_is_saved = current_record['VABNCL'] != ''
+        # Get current record
+        record = self.df_spedizioni.iloc[self.current_index]
 
-        # Verifica se tutti i record sono stati completati (NO vuoti, NO SKIP)
-        empty_records = int((self.df_spedizioni['VABNCL'] == '').sum())
-        skipped_records = int((self.df_spedizioni['VABNCL'] == 'SKIP').sum())
+        # Update UI components
+        self.dest_text.setHtml(self._format_recipient_info(record))
+        self._update_input_fields(record)
+        self._update_progress_display()
+
+        # Enable/disable buttons based on position
+        self.update_navigation_buttons()
+
+    def _calculate_navigation_state(self) -> Dict[str, Any]:
+        """Calculate the state for navigation buttons (business logic).
+
+        Returns:
+            Dict containing all button states and configuration
+        """
+        # Update cache if needed
+        self._update_cache()
+
+        # Use cached values
+        total = self._cache_total
+        empty_records = self._cache_empty
+        skipped_records = self._cache_skipped
+
+        is_last = self.current_index >= total - 1  # type: ignore
+        is_first = self.current_index == 0
+
+        # Check if all records are completed (NO empty, NO SKIP)
         all_completed = bool((empty_records == 0) and (skipped_records == 0))
 
-        # Bottone Precedente: disabilita se siamo al primo
-        self.prev_btn.setEnabled(self.current_index > 0)
-
-        # Bottone Salta: disabilita se siamo all'ultimo
-        self.skip_btn.setEnabled(not is_last)
-
-        # Bottone "Vai a Saltati": mostra SOLO se ci sono record saltati
-        if skipped_records > 0:
-            self.goto_skipped_btn.setVisible(True)
-        else:
-            self.goto_skipped_btn.setVisible(False)
-
-        # Bottone SALVA E SUCCESSIVO/ESPORTA:
-        # - Si attiva se i campi correnti sono compilati
-        # - All'ultimo record, controlla anche che NON ci siano SKIP
+        # Validate current input fields
         colli_valid = self.colli_input.text().strip() != ''
         peso_valid = self.peso_input.text().strip() != ''
+        fields_valid = colli_valid and peso_valid
 
+        # Determine if save is allowed
         if is_last:
-            # All'ultimo record: attiva SOLO se non ci sono record skippati
-            can_save = colli_valid and peso_valid and (skipped_records == 0)
+            # At last record: activate ONLY if there are no skipped records
+            can_save = fields_valid and (skipped_records == 0)
         else:
-            # Durante la navigazione: attiva se i campi sono validi
-            can_save = colli_valid and peso_valid
+            # During navigation: activate if fields are valid
+            can_save = fields_valid
 
-        # Se tutto è completato, mostra "COMPLETATO" in grigio
-        if all_completed:
-            self.save_next_btn.setText("✓ COMPLETATO")
+        return {
+            # Button enable/disable states
+            'prev_enabled': not is_first,
+            'skip_enabled': not is_last,
+            'goto_skipped_visible': skipped_records > 0,
+            'save_enabled': can_save if not all_completed else False,
+            'export_enabled': all_completed,
+
+            # Button appearance
+            'all_completed': all_completed,
+            'is_last': is_last,
+            'can_save': can_save,
+        }
+
+    def _apply_navigation_state(self, state: Dict[str, Any]) -> None:
+        """Apply calculated state to navigation buttons (UI logic).
+
+        Args:
+            state: Dictionary containing button states from _calculate_navigation_state
+        """
+        # Previous button
+        self.prev_btn.setEnabled(state['prev_enabled'])
+
+        # Skip button
+        self.skip_btn.setEnabled(state['skip_enabled'])
+
+        # "Go to Skipped" button
+        self.goto_skipped_btn.setVisible(state['goto_skipped_visible'])
+
+        # Save/Next button
+        if state['all_completed']:
+            # All completed: show "COMPLETATO" in gray
+            self.save_next_btn.setText(Messages.BTN_COMPLETED)
             self.save_next_btn.setEnabled(False)
-            self.save_next_btn.setStyleSheet("background-color: #CCCCCC; color: #666666; border: none; padding: 8px 15px; border-radius: 4px;")
+            self.save_next_btn.setStyleSheet(self._get_button_style('disabled'))
         else:
-            self.save_next_btn.setEnabled(can_save)
+            self.save_next_btn.setEnabled(state['save_enabled'])
 
-            if is_last:
-                self.save_next_btn.setText("✓ SALVA E COMPLETA")
-                if can_save:
-                    self.save_next_btn.setStyleSheet("background-color: #DC012E; color: white; font-weight: bold; border: none; padding: 8px 15px; border-radius: 4px;")
+            if state['is_last']:
+                # Last record: show "SAVE AND COMPLETE"
+                self.save_next_btn.setText(Messages.BTN_SAVE_AND_COMPLETE)
+                if state['can_save']:
+                    self.save_next_btn.setStyleSheet(self._get_button_style('danger'))
                 else:
-                    self.save_next_btn.setStyleSheet("background-color: #CCCCCC; color: #666666; border: none; padding: 8px 15px; border-radius: 4px;")
+                    self.save_next_btn.setStyleSheet(self._get_button_style('disabled'))
             else:
-                self.save_next_btn.setText("✓ SALVA E SUCCESSIVO ▶")
-                if can_save:
-                    self.save_next_btn.setStyleSheet("background-color: #16FEBC; color: #333333; font-weight: bold; border: none; padding: 8px 15px; border-radius: 4px;")
+                # Regular record: show "SAVE AND NEXT"
+                self.save_next_btn.setText(Messages.BTN_SAVE_AND_NEXT)
+                if state['can_save']:
+                    self.save_next_btn.setStyleSheet(self._get_button_style('primary'))
                 else:
-                    self.save_next_btn.setStyleSheet("background-color: #CCCCCC; color: #666666; border: none; padding: 8px 15px; border-radius: 4px;")
+                    self.save_next_btn.setStyleSheet(self._get_button_style('disabled'))
 
-        # Bottone Esporta: abilita SOLO se TUTTI i record sono completati (NO SKIP!)
+        # Export button
         self.export_btn.setVisible(True)
-        self.export_btn.setEnabled(all_completed)
+        self.export_btn.setEnabled(state['export_enabled'])
 
-        if all_completed:
-            self.export_btn.setStyleSheet("background-color: #5F38E6; color: white; font-weight: bold; border: none; padding: 10px; border-radius: 4px;")
+        if state['export_enabled']:
+            self.export_btn.setStyleSheet(self._get_button_style('info'))
         else:
-            self.export_btn.setStyleSheet("background-color: #CCCCCC; color: #666666; border: none; padding: 10px; border-radius: 4px;")
+            self.export_btn.setStyleSheet(self._get_button_style('disabled_export'))
 
-    def save_and_next_unified(self):
-        """Pulsante unificato: salva e successivo oppure salva ed esporta"""
+    def update_navigation_buttons(self) -> None:
+        """Update navigation button states by calculating and applying state."""
+
+        if self.df_spedizioni is None or len(self.df_spedizioni) == 0:
+            return
+
+        # Calculate state (business logic)
+        state = self._calculate_navigation_state()
+
+        # Apply state to UI
+        self._apply_navigation_state(state)
+
+    def save_and_next_unified(self) -> None:
+        """Unified button: save and next or save and export"""
 
         if self.df_spedizioni is None:
             return
 
-        # Valida input
-        try:
-            colli = self.colli_input.text().strip()
-            peso = self.peso_input.text().strip()
-
-            if not colli or not peso:
-                QMessageBox.warning(self, "Attenzione",
-                    "Compilare tutti i campi (colli e peso)")
-                return
-
-            # Converti e valida
-            colli_int = int(colli)
-            peso_float = float(peso.replace(',', '.'))
-
-            if colli_int <= 0 or peso_float <= 0:
-                QMessageBox.warning(self, "Attenzione",
-                    "Colli e peso devono essere maggiori di zero")
-                return
-
-        except ValueError:
-            QMessageBox.warning(self, "Attenzione",
-                "Valori non validi per colli o peso")
+        # Validate input
+        validated_data = self._validate_shipment_data()
+        if validated_data is None:
             return
 
-        # Salva dati nel record corrente
-        self.df_spedizioni.iloc[self.current_index, self.df_spedizioni.columns.get_loc('VABNCL')] = str(colli_int)
-        self.df_spedizioni.iloc[self.current_index, self.df_spedizioni.columns.get_loc('VABPKB')] = f"{peso_float:.1f}"
+        colli_int, peso_float = validated_data
 
-        # Salva su file
+        # Save data in current record
+        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABNCL'] = str(colli_int)
+        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABPKB'] = f"{peso_float:.1f}"
+
+        # Invalidate cache since DataFrame changed
+        self._invalidate_cache()
+
+        # Save to file
         self.save_data_to_file()
 
-        # Se siamo in modalità navigazione saltati, vai al prossimo saltato
+        # If in skip navigation mode, go to next skipped
         if self.skip_navigation_mode:
-            # Trova tutti i record saltati
+            # Find all skipped records
             skipped_indices = self.df_spedizioni[self.df_spedizioni['VABNCL'] == 'SKIP'].index.tolist()
 
             if not skipped_indices:
-                # Non ci sono più record saltati!
-                # Esci dalla modalità e trova il primo record vuoto (se esiste)
+                # No more skipped records!
+                # Exit mode and find first empty record (if exists)
                 self.skip_navigation_mode = False
 
-                # Cerca il primo record NON compilato
+                # Look for first NOT completed record
                 empty_indices = self.df_spedizioni[self.df_spedizioni['VABNCL'] == ''].index.tolist()
 
                 if empty_indices:
-                    # Ci sono ancora record vuoti da compilare
-                    # Vai al primo record vuoto
+                    # There are still empty records to fill
+                    # Go to first empty record
                     first_empty = self.df_spedizioni.index.get_loc(empty_indices[0])
                     self.current_index = first_empty
                 else:
-                    # Tutto completato! Vai all'ultimo record
+                    # All completed! Go to last record
                     total = len(self.df_spedizioni)
                     self.current_index = total - 1
 
                 self.show_current_record()
                 return
 
-            # Cerca il primo record saltato DOPO l'indice corrente
+            # Look for first skipped record AFTER current index
             next_skipped = None
             for idx in skipped_indices:
                 idx_pos = self.df_spedizioni.index.get_loc(idx)
-                if idx_pos > self.current_index:
+                if idx_pos > self.current_index:  # type: ignore
                     next_skipped = idx_pos
                     break
 
-            # Se non ce ne sono dopo, prendi il primo in assoluto
+            # If there are none after, take the first one
             if next_skipped is None:
                 next_skipped = self.df_spedizioni.index.get_loc(skipped_indices[0])
 
-            # Vai al prossimo record saltato
+            # Go to next skipped record
             self.current_index = next_skipped
         else:
-            # Modalità normale: vai al prossimo in sequenza
+            # Normal mode: go to next in sequence
             total = len(self.df_spedizioni)
-            is_last = self.current_index >= total - 1
+            is_last = self.current_index >= total - 1  # type: ignore
 
             if not is_last:
-                # Vai al prossimo record
-                self.current_index += 1
+                # Go to next record
+                self.current_index += 1  # type: ignore
 
-        # Aggiorna visualizzazione
+        # Update display
         self.show_current_record()
 
-    def save_and_next(self):
-        """Salva dati correnti e passa al successivo"""
+    def save_and_next(self) -> None:
+        """Save current data and move to next"""
 
         if self.df_spedizioni is None:
             return
 
-        # Verifica di non essere già all'ultimo record
-        if self.current_index >= len(self.df_spedizioni) - 1:
-            QMessageBox.warning(self, "Attenzione",
-                "Sei già all'ultimo record!\n\n"
-                "Non ci sono altri clienti da compilare.")
+        # Check we're not already at the last record
+        if self.current_index >= len(self.df_spedizioni) - 1:  # type: ignore
+            QMessageBox.warning(self, Messages.TITLE_WARNING,
+                Messages.MSG_ALREADY_LAST)
             return
 
-        # Valida input
-        try:
-            colli = self.colli_input.text().strip()
-            peso = self.peso_input.text().strip()
-
-            if not colli or not peso:
-                QMessageBox.warning(self, "Attenzione",
-                    "Compilare tutti i campi (colli e peso)")
-                return
-
-            # Converti e valida
-            colli_int = int(colli)
-            peso_float = float(peso.replace(',', '.'))
-
-            if colli_int <= 0 or peso_float <= 0:
-                QMessageBox.warning(self, "Attenzione",
-                    "Colli e peso devono essere maggiori di zero")
-                return
-
-        except ValueError:
-            QMessageBox.warning(self, "Attenzione",
-                "Valori non validi per colli o peso")
+        # Validate input
+        validated_data = self._validate_shipment_data()
+        if validated_data is None:
             return
 
-        # Salva dati SOLO nel record corrente (non aggiunge mai righe)
-        # Usa iloc per accesso posizionale, non at che usa l'indice del DataFrame
-        self.df_spedizioni.iloc[self.current_index, self.df_spedizioni.columns.get_loc('VABNCL')] = str(colli_int)
-        self.df_spedizioni.iloc[self.current_index, self.df_spedizioni.columns.get_loc('VABPKB')] = f"{peso_float:.1f}"
+        colli_int, peso_float = validated_data
 
-        # Salva su file
+        # Save data ONLY in current record (never adds rows)
+        # Use loc for safe assignment
+        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABNCL'] = str(colli_int)
+        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABPKB'] = f"{peso_float:.1f}"
+
+        # Invalidate cache since DataFrame changed
+        self._invalidate_cache()
+
+        # Save to file
         self.save_data_to_file()
 
-        # Vai al prossimo (abbiamo già verificato che non sia l'ultimo)
-        self.current_index += 1
+        # Go to next (we already verified it's not the last)
+        self.current_index += 1  # type: ignore
         self.show_current_record()
 
-    def save_current(self):
-        """Salva il record corrente senza passare al successivo"""
+    def save_current(self) -> None:
+        """Save current record without moving to next"""
 
         if self.df_spedizioni is None:
             return
 
-        # Valida input
-        try:
-            colli = self.colli_input.text().strip()
-            peso = self.peso_input.text().strip()
-
-            if not colli or not peso:
-                QMessageBox.warning(self, "Attenzione",
-                    "Compilare tutti i campi (colli e peso)")
-                return
-
-            # Converti e valida
-            colli_int = int(colli)
-            peso_float = float(peso.replace(',', '.'))
-
-            if colli_int <= 0 or peso_float <= 0:
-                QMessageBox.warning(self, "Attenzione",
-                    "Colli e peso devono essere maggiori di zero")
-                return
-
-        except ValueError:
-            QMessageBox.warning(self, "Attenzione",
-                "Valori non validi per colli o peso")
+        # Validate input
+        validated_data = self._validate_shipment_data()
+        if validated_data is None:
             return
 
-        # Salva dati nel record corrente
-        self.df_spedizioni.iloc[self.current_index, self.df_spedizioni.columns.get_loc('VABNCL')] = str(colli_int)
-        self.df_spedizioni.iloc[self.current_index, self.df_spedizioni.columns.get_loc('VABPKB')] = f"{peso_float:.1f}"
+        colli_int, peso_float = validated_data
 
-        # Salva su file
+        # Save data in current record
+        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABNCL'] = str(colli_int)
+        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABPKB'] = f"{peso_float:.1f}"
+
+        # Invalidate cache since DataFrame changed
+        self._invalidate_cache()
+
+        # Save to file
         self.save_data_to_file()
 
-        # Aggiorna visualizzazione (rimane sullo stesso record)
+        # Update display (stays on same record)
         self.show_current_record()
 
-    def skip_item(self):
-        """Salta il record corrente"""
+    def skip_item(self) -> None:
+        """Skip current record"""
 
         if self.df_spedizioni is None:
             return
 
-        # Marca come saltato
-        self.df_spedizioni.iloc[self.current_index, self.df_spedizioni.columns.get_loc('VABNCL')] = 'SKIP'
-        self.df_spedizioni.iloc[self.current_index, self.df_spedizioni.columns.get_loc('VABPKB')] = 'SKIP'
+        # Mark as skipped
+        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABNCL'] = 'SKIP'
+        self.df_spedizioni.loc[self.df_spedizioni.index[self.current_index], 'VABPKB'] = 'SKIP'
 
-        # Salva
+        # Invalidate cache since DataFrame changed
+        self._invalidate_cache()
+
+        # Save
         self.save_data_to_file()
 
-        # Vai al prossimo
-        if self.current_index < len(self.df_spedizioni) - 1:
-            self.current_index += 1
-            self.show_current_record()
+        # Go to next
+        if self.current_index < len(self.df_spedizioni) - 1: # type: ignore 
+            self.current_index += 1 # type: ignore 
+        self.show_current_record()
 
-    def previous_item(self):
-        """Torna al record precedente"""
+    def previous_item(self) -> None:
+        """Go back to previous record"""
 
-        if self.df_spedizioni is None or self.current_index == 0:
+        if self.df_spedizioni is None or self.current_index == 0:  # type: ignore
             return
 
-        # Esci dalla modalità navigazione saltati
+        # Exit skip navigation mode
         self.skip_navigation_mode = False
 
-        self.current_index -= 1
+        self.current_index -= 1  # type: ignore
         self.show_current_record()
 
-    def goto_next_skipped(self):
-        """Vai al prossimo record saltato (SKIP)"""
+    def goto_next_skipped(self) -> None:
+        """Go to next skipped record (SKIP)"""
 
         if self.df_spedizioni is None:
             return
 
-        # Trova tutti i record saltati
+        # Find all skipped records
         skipped_indices = self.df_spedizioni[self.df_spedizioni['VABNCL'] == 'SKIP'].index.tolist()
 
         if not skipped_indices:
-            QMessageBox.information(self, "Info", "Non ci sono record saltati da compilare!")
+            QMessageBox.information(self, Messages.TITLE_INFO, Messages.MSG_NO_SKIPPED)
             self.skip_navigation_mode = False
             return
 
-        # Attiva modalità navigazione saltati
+        # Activate skip navigation mode
         self.skip_navigation_mode = True
 
-        # Cerca il primo record saltato DOPO l'indice corrente
+        # Look for first skipped record AFTER current index
         next_skipped = None
         for idx in skipped_indices:
             idx_pos = self.df_spedizioni.index.get_loc(idx)
-            if idx_pos > self.current_index:
+            if idx_pos > self.current_index:  # type: ignore
                 next_skipped = idx_pos
                 break
 
-        # Se non ce ne sono dopo, prendi il primo in assoluto (ricomincia dal primo)
+        # If there are none after, take the first one (restart from first)
         if next_skipped is None:
             next_skipped = self.df_spedizioni.index.get_loc(skipped_indices[0])
 
-        # Vai al record saltato
+        # Go to skipped record
         self.current_index = next_skipped
         self.show_current_record()
 
-    def save_data_to_file(self):
-        """Salva i dati compilati su file JSON"""
+    def save_data_to_file(self) -> None:
+        """Save compiled data to JSON file"""
 
         if self.df_spedizioni is None:
             return
 
         try:
-            # Salva SOLO i record compilati (con VABNCL non vuoto)
+            # Save ONLY completed records (with non-empty VABNCL)
             df_to_save = self.df_spedizioni[self.df_spedizioni['VABNCL'] != ''][['VABNSP', 'VABNCL', 'VABPKB']]
 
             data = {
@@ -1477,23 +2125,23 @@ rm -f "$0"
                 'data': df_to_save.to_dict('records')
             }
 
-            with open(self.save_file, 'w') as f:
+            with open(str(self.save_file), 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
 
         except Exception as e:
-            print(f"Errore nel salvataggio: {e}")
+            logger.error(f"Failed to save data to {self.save_file}: {e}", exc_info=True)
 
-    def load_saved_data(self):
-        """Carica i dati salvati precedentemente"""
+    def load_saved_data(self) -> None:
+        """Load previously saved data"""
 
         if not self.save_file.exists() or self.df_spedizioni is None:
             return
 
         try:
-            with open(self.save_file, 'r') as f:
+            with open(str(self.save_file), 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
-            # Ripristina dati compilati
+            # Restore completed data
             for item in data['data']:
                 mask = self.df_spedizioni['VABNSP'] == item['VABNSP']
                 if mask.any():
@@ -1501,76 +2149,82 @@ rm -f "$0"
                     self.df_spedizioni.at[idx, 'VABNCL'] = item['VABNCL']
                     self.df_spedizioni.at[idx, 'VABPKB'] = item['VABPKB']
 
-        except Exception as e:
-            print(f"Errore nel caricamento dati salvati: {e}")
+            # Invalidate cache since DataFrame changed
+            self._invalidate_cache()
 
-    def export_brt_csv(self):
-        """Esporta il CSV finale per BRT"""
+        except Exception as e:
+            logger.error(f"Failed to load saved data from {self.save_file}: {e}", exc_info=True)
+            # Continue without restoring data - user will start fresh
+
+    def export_brt_csv(self) -> None:
+        """Export final CSV for BRT"""
 
         if self.df_spedizioni is None:
-            QMessageBox.warning(self, "Attenzione", "Carica prima un file CSV")
+            QMessageBox.warning(self, Messages.TITLE_WARNING, Messages.MSG_LOAD_CSV_FIRST)
             return
 
-        # Filtra solo record completati
+        # Filter only completed records
         df_export = self.df_spedizioni[
-            (self.df_spedizioni['VABNCL'] != '') &
-            (self.df_spedizioni['VABNCL'] != 'SKIP')
+            (self.df_spedizioni[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.EMPTY.value) &
+            (self.df_spedizioni[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.SKIP.value)
         ].copy()
 
         if len(df_export) == 0:
-            QMessageBox.warning(self, "Attenzione",
-                "Nessun record completato da esportare")
+            QMessageBox.warning(self, Messages.TITLE_WARNING,
+                Messages.MSG_NO_RECORDS_TO_EXPORT)
             return
 
-        # Ordina colonne secondo tracciato BRT
-        colonne_brt = [
-            'VABATB', 'VABCCM', 'VABNSP', 'VABCBO', 'VABRSD', 'VABIND',
-            'VABCAD', 'VABLOD', 'VABPRD', 'VABNZD', 'VABCTR', 'VABTSP',
-            'VABNAS', 'VABNCL', 'VABPKB', 'VABRMN', 'VABRMA', 'VABTRC',
-            'VABCEL'
-        ]
+        # Order columns according to BRT specification
+        colonne_brt = CSVColumns.get_brt_column_order()
 
-        # Aggiungi colonne mancanti se necessario
+        # Add missing columns if necessary
         for col in colonne_brt:
             if col not in df_export.columns:
-                df_export[col] = ''
+                df_export[col] = RecordStatus.EMPTY.value
 
-        # Seleziona e ordina colonne
+        # Select and order columns
         df_export = df_export[colonne_brt]
 
-        # Chiedi dove salvare
-        default_filename = f"spedizioni_BRT_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        # Ask where to save
+        default_filename = f"{FileSettings.CSV_EXPORT_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        default_path = Path.home() / "Documents" / default_filename
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Salva CSV per BRT",
-            str(Path.home() / "Documents" / default_filename),
-            "CSV files (*.csv);;All files (*.*)"
+            Messages.FILE_DIALOG_TITLE_SAVE,
+            str(default_path),
+            Messages.FILE_DIALOG_FILTER
         )
 
         if not file_path:
             return
 
+        export_path = Path(file_path)
+
         try:
-            # Esporta CSV (con header, separatore punto e virgola)
-            df_export.to_csv(file_path, sep=';', index=False, header=True, encoding='utf-8')
+            # Export CSV (with header, semicolon separator)
+            df_export.to_csv(str(export_path), sep=';', index=False, header=True, encoding='utf-8')
+
+            logger.info(f"Successfully exported {len(df_export)} shipments to {export_path}")
 
             self.export_label.setText(
-                f"✓ Esportate {len(df_export)} spedizioni in:\n{Path(file_path).name}"
+                Messages.format(Messages.LABEL_SHIPMENTS_EXPORTED,
+                               count=len(df_export),
+                               filename=export_path.name)
             )
 
-            QMessageBox.information(self, "Successo",
-                f"File esportato con successo!\n\n"
-                f"Spedizioni esportate: {len(df_export)}\n"
-                f"File: {Path(file_path).name}\n\n"
-                f"Ora puoi caricare questo file sul gestionale BRT.")
+            QMessageBox.information(self, Messages.TITLE_SUCCESS,
+                Messages.format(Messages.MSG_FILE_EXPORTED,
+                               count=len(df_export),
+                               filename=export_path.name))
 
         except Exception as e:
-            QMessageBox.critical(self, "Errore",
-                f"Errore nell'esportazione:\n{str(e)}")
+            logger.error(f"Failed to export BRT CSV to {export_path}: {e}", exc_info=True)
+            QMessageBox.critical(self, Messages.TITLE_ERROR,
+                Messages.format(Messages.MSG_FILE_EXPORT_ERROR, error=str(e)))
 
 
-def main():
-    """Funzione principale"""
+def main() -> None:
+    """Main function"""
     app = QApplication(sys.argv)
     window = BRTSpedizioniApp()
     window.show()
