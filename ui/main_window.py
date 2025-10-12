@@ -31,10 +31,11 @@ from core.utils import get_monospace_font, MONOSPACE_FONT, logger
 from core.models import validate_shipment_input
 from services.updater import UpdateDownloader, UpdateChecker
 from .dialogs import DownloadDialog, AboutDialog
+from .components.settings_manager import SettingsManager
 
 
 # Application metadata (imported from main module)
-__version__ = "3.6.0"
+__version__ = "3.7.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-12"
 __developer__ = "Marco De Luca"
@@ -62,7 +63,11 @@ class BRTSpedizioniApp(QMainWindow):
         self.current_index: int = 0
         # Save JSON in the same folder as the application
         self.save_file: Path = Path(__file__).parent.parent / "brt_spedizioni_data.json"
-        self.settings_file: Path = Path(__file__).parent.parent / "brt_settings.json"
+        settings_file: Path = Path(__file__).parent.parent / "brt_settings.json"
+
+        # Initialize settings manager
+        self.settings_manager = SettingsManager(settings_file)
+
         # Skip navigation mode
         self.skip_navigation_mode: bool = False
 
@@ -581,7 +586,7 @@ class BRTSpedizioniApp(QMainWindow):
             self.brt_tariff_code = self.settings_tariff_code_input.text().strip()
             self.brt_service_type = self.settings_service_type_input.text().strip()
 
-            # Save to file (include BRT configurable fields)
+            # Save to file using SettingsManager
             settings_data = {
                 'default_colli': self.default_colli,
                 'default_peso': self.default_peso,
@@ -592,10 +597,7 @@ class BRTSpedizioniApp(QMainWindow):
                 'brt_service_type': self.brt_service_type
             }
 
-            with open(str(self.settings_file), 'w', encoding='utf-8') as f:
-                json.dump(settings_data, f, indent=2)
-
-            logger.info(f"Settings saved successfully: colli={colli}, peso={peso}")
+            self.settings_manager.save(settings_data)
 
             QMessageBox.information(self, Messages.TITLE_SUCCESS,
                 Messages.MSG_SETTINGS_SAVED)
@@ -610,30 +612,16 @@ class BRTSpedizioniApp(QMainWindow):
 
     def load_settings(self) -> None:
         """Load saved settings"""
-        if not self.settings_file.exists():
-            logger.debug(f"Settings file {self.settings_file} not found, using default values")
-            return
+        settings = self.settings_manager.load()
 
-        try:
-            with open(str(self.settings_file), 'r', encoding='utf-8') as f:
-                settings_data = json.load(f)
-
-            # Load shipment defaults
-            self.default_colli = settings_data.get('default_colli', 1)
-            self.default_peso = settings_data.get('default_peso', 2)
-
-            # Load BRT configurable fields
-            self.brt_customer_code = settings_data.get('brt_customer_code', BRTDefaults.DEFAULT_CUSTOMER_CODE)
-            self.brt_alphabetic_ref = settings_data.get('brt_alphabetic_ref', BRTDefaults.DEFAULT_ALPHABETIC_REF)
-            self.brt_goods_type = settings_data.get('brt_goods_type', BRTDefaults.DEFAULT_GOODS_TYPE)
-            self.brt_tariff_code = settings_data.get('brt_tariff_code', BRTDefaults.DEFAULT_TARIFF_CODE)
-            self.brt_service_type = settings_data.get('brt_service_type', BRTDefaults.DEFAULT_SERVICE_TYPE)
-
-            logger.info(f"Settings loaded successfully from {self.settings_file}")
-
-        except Exception as e:
-            logger.error(f"Failed to load settings from {self.settings_file}: {e}", exc_info=True)
-            # Continue with default values - they're already set
+        # Apply loaded settings
+        self.default_colli = settings['default_colli']
+        self.default_peso = settings['default_peso']
+        self.brt_customer_code = settings['brt_customer_code']
+        self.brt_alphabetic_ref = settings['brt_alphabetic_ref']
+        self.brt_goods_type = settings['brt_goods_type']
+        self.brt_tariff_code = settings['brt_tariff_code']
+        self.brt_service_type = settings['brt_service_type']
 
     def check_for_updates(self) -> None:
         """Start update check in background"""
