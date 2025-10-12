@@ -4,7 +4,7 @@ BRT Shipping Management Application - PyQt5
 Converts the LISTADDT.csv file to the format required by BRT
 """
 
-__version__ = "3.2.0"
+__version__ = "3.3.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-12"
 __developer__ = "Marco De Luca"
@@ -41,6 +41,9 @@ from constants import (
 
 # Import utilities from separate module
 from utils import get_monospace_font, setup_logging, MONOSPACE_FONT, logger
+
+# Import models from separate module
+from models import AppSettings, validate_shipment_input
 
 
 # ============================================================================
@@ -1229,30 +1232,17 @@ rm -f "$0"
         Returns:
             Optional[Tuple[int, float]]: (colli, peso) if valid, None if invalid
         """
-        try:
-            colli = self.colli_input.text().strip()
-            peso = self.peso_input.text().strip()
+        colli = self.colli_input.text().strip()
+        peso = self.peso_input.text().strip()
 
-            if not colli or not peso:
-                QMessageBox.warning(self, Messages.TITLE_WARNING,
-                    Messages.MSG_EMPTY_FIELDS)
-                return None
+        colli_int, peso_float, error_msg = validate_shipment_input(colli, peso)
 
-            # Convert and validate
-            colli_int = int(colli)
-            peso_float = float(peso.replace(',', '.'))
-
-            if colli_int <= 0 or peso_float <= 0:
-                QMessageBox.warning(self, Messages.TITLE_WARNING,
-                    Messages.MSG_POSITIVE_VALUES)
-                return None
-
-            return (colli_int, peso_float)
-
-        except ValueError:
-            QMessageBox.warning(self, Messages.TITLE_WARNING,
-                Messages.MSG_INVALID_VALUES)
+        if error_msg or colli_int is None or peso_float is None:
+            if error_msg:
+                QMessageBox.warning(self, Messages.TITLE_WARNING, error_msg)
             return None
+
+        return (colli_int, peso_float)
 
     def _invalidate_cache(self) -> None:
         """Mark the cache as dirty to force recalculation on next access."""
