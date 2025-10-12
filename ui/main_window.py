@@ -7,12 +7,8 @@ import sys
 import platform
 import pandas as pd
 from pathlib import Path
-from datetime import datetime
-import json
-import urllib.request
 import webbrowser
 import subprocess
-import shutil
 import os
 import zipfile
 from typing import Optional, Dict, Any, Tuple
@@ -32,10 +28,11 @@ from core.models import validate_shipment_input
 from services.updater import UpdateDownloader, UpdateChecker
 from .dialogs import DownloadDialog, AboutDialog
 from .components.settings_manager import SettingsManager
+from .components.csv_handler import CsvHandler
 
 
 # Application metadata (imported from main module)
-__version__ = "3.7.0"
+__version__ = "3.8.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-12"
 __developer__ = "Marco De Luca"
@@ -67,6 +64,9 @@ class BRTSpedizioniApp(QMainWindow):
 
         # Initialize settings manager
         self.settings_manager = SettingsManager(settings_file)
+
+        # Initialize CSV handler
+        self.csv_handler = CsvHandler(self, self.save_file)
 
         # Skip navigation mode
         self.skip_navigation_mode: bool = False
@@ -876,67 +876,20 @@ rm -f "$0"
     def load_csv(self) -> None:
         """Load and process the CSV file"""
 
-        default_dir = Path.home() / "Documents"
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            Messages.FILE_DIALOG_TITLE_LOAD,
-            str(default_dir),
-            Messages.FILE_DIALOG_FILTER
-        )
+        # Prepare BRT configuration
+        brt_config = {
+            'brt_customer_code': self.brt_customer_code,
+            'brt_goods_type': self.brt_goods_type,
+            'brt_alphabetic_ref': self.brt_alphabetic_ref,
+            'brt_tariff_code': self.brt_tariff_code,
+            'brt_service_type': self.brt_service_type
+        }
 
-        if not file_path:
-            return
+        # Use CSV handler to load file
+        result = self.csv_handler.load_csv(brt_config)
 
-        csv_path = Path(file_path)
-
-        try:
-            # Read CSV forcing text columns as strings
-            # SpedLocalita2 (phone) and SpedCAP must be strings to avoid float conversion
-            df = pd.read_csv(str(csv_path), sep=';', encoding='utf-8', dtype={
-                CSVColumns.INPUT_TELEFONO: str,
-                CSVColumns.INPUT_CAP: str
-            })
-
-            # Verify required columns
-            required_cols = CSVColumns.get_required_input_columns()
-
-            missing_cols = [col for col in required_cols if col not in df.columns]
-            if missing_cols:
-                QMessageBox.critical(self, Messages.TITLE_ERROR,
-                    Messages.format(Messages.MSG_MISSING_COLUMNS, columns=', '.join(missing_cols)))
-                return
-
-            # Select only required columns
-            df = df[required_cols].copy()
-
-            # Ensure phone and CAP are clean strings (remove NaN)
-            df[CSVColumns.INPUT_TELEFONO] = df[CSVColumns.INPUT_TELEFONO].fillna('').astype(str)
-            df[CSVColumns.INPUT_CAP] = df[CSVColumns.INPUT_CAP].fillna('').astype(str)
-
-            # Remove duplicates based on registration number
-            df_unique = df.drop_duplicates(subset=[CSVColumns.INPUT_NUMERO], keep='first')
-
-            # Rename columns according to BRT mapping
-            df_unique = df_unique.rename(columns=CSVColumns.get_column_mapping())
-
-            # Duplicate shipment number for sender reference
-            df_unique[CSVColumns.OUTPUT_RIF_MITTENTE] = df_unique[CSVColumns.OUTPUT_NUM_SPEDIZIONE]
-
-            # Mobile must contain phone (already mapped)
-            df_unique[CSVColumns.OUTPUT_CELLULARE] = df_unique[CSVColumns.OUTPUT_TELEFONO_REF]
-
-            # Add columns for data to be filled
-            df_unique[CSVColumns.OUTPUT_NUM_COLLI] = RecordStatus.EMPTY.value
-            df_unique[CSVColumns.OUTPUT_PESO_KG] = RecordStatus.EMPTY.value
-
-            # Add fixed fields (use configurable values)
-            df_unique[CSVColumns.OUTPUT_ABBUONO_TB] = BRTDefaults.DEFAULT_ABBUONO
-            df_unique[CSVColumns.OUTPUT_COD_CLIENTE] = self.brt_customer_code
-            df_unique[CSVColumns.OUTPUT_NATURA_SPEDIZIONE] = self.brt_goods_type
-            df_unique[CSVColumns.OUTPUT_RIF_ALFABETICO] = self.brt_alphabetic_ref
-            df_unique[CSVColumns.OUTPUT_COD_TARIFFA] = self.brt_tariff_code
-            df_unique[CSVColumns.OUTPUT_NAZIONE_DEST] = BRTDefaults.DEFAULT_COUNTRY_DEST
-            df_unique[CSVColumns.OUTPUT_TIPO_SERVIZIO] = self.brt_service_type
+        if result is not None:
+            df_unique, filename, num_rows, duplicates = result
 
             # Save dataframe
             self.df_spedizioni = df_unique
@@ -945,32 +898,14 @@ rm -f "$0"
             # Invalidate cache for new DataFrame
             self._invalidate_cache()
 
-            # Delete saved JSON (new file = new session)
-            if self.save_file.exists():
-                self.save_file.unlink()
-
             # Update interface
-            num_rows = len(self.df_spedizioni)
-            num_orig = len(df)
-            duplicates = num_orig - num_rows
-
-            self.file_label.setText(Messages.format(Messages.LABEL_FILE_LOADED, filename=csv_path.name))
+            self.file_label.setText(Messages.format(Messages.LABEL_FILE_LOADED, filename=filename))
             self.info_label.setText(
                 Messages.format(Messages.LABEL_SHIPMENTS_LOADED, count=num_rows, duplicates=duplicates)
             )
 
             # Show first record
             self.show_current_record()
-
-            logger.info(f"Successfully loaded CSV file with {num_rows} unique shipments ({duplicates} duplicates removed)")
-
-            QMessageBox.information(self, Messages.TITLE_SUCCESS,
-                Messages.format(Messages.MSG_FILE_LOADED, count=num_rows, duplicates=duplicates))
-
-        except Exception as e:
-            logger.error(f"Failed to load CSV file {csv_path}: {e}", exc_info=True)
-            QMessageBox.critical(self, Messages.TITLE_ERROR,
-                Messages.format(Messages.MSG_FILE_LOAD_ERROR, error=str(e)))
 
     def _validate_shipment_data(self) -> Optional[Tuple[int, float]]:
         """Validate colli and peso input fields.
@@ -1476,114 +1411,27 @@ rm -f "$0"
 
     def save_data_to_file(self) -> None:
         """Save compiled data to JSON file"""
-
-        if self.df_spedizioni is None:
-            return
-
-        try:
-            # Save ONLY completed records (with non-empty VABNCL)
-            df_to_save = self.df_spedizioni[self.df_spedizioni['VABNCL'] != ''][['VABNSP', 'VABNCL', 'VABPKB']]
-
-            data = {
-                'last_modified': datetime.now().isoformat(),
-                'data': df_to_save.to_dict('records')
-            }
-
-            with open(str(self.save_file), 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
-
-        except Exception as e:
-            logger.error(f"Failed to save data to {self.save_file}: {e}", exc_info=True)
+        self.csv_handler.save_data_to_file(self.df_spedizioni)
 
     def load_saved_data(self) -> None:
         """Load previously saved data"""
-
-        if not self.save_file.exists() or self.df_spedizioni is None:
-            return
-
-        try:
-            with open(str(self.save_file), 'r', encoding='utf-8') as f:
-                data = json.load(f)
-
-            # Restore completed data
-            for item in data['data']:
-                mask = self.df_spedizioni['VABNSP'] == item['VABNSP']
-                if mask.any():
-                    idx = self.df_spedizioni[mask].index[0]
-                    self.df_spedizioni.at[idx, 'VABNCL'] = item['VABNCL']
-                    self.df_spedizioni.at[idx, 'VABPKB'] = item['VABPKB']
-
-            # Invalidate cache since DataFrame changed
+        self.csv_handler.load_saved_data(self.df_spedizioni)
+        # Invalidate cache since DataFrame might have changed
+        if self.df_spedizioni is not None:
             self._invalidate_cache()
-
-        except Exception as e:
-            logger.error(f"Failed to load saved data from {self.save_file}: {e}", exc_info=True)
-            # Continue without restoring data - user will start fresh
 
     def export_brt_csv(self) -> None:
         """Export final CSV for BRT"""
 
-        if self.df_spedizioni is None:
-            QMessageBox.warning(self, Messages.TITLE_WARNING, Messages.MSG_LOAD_CSV_FIRST)
-            return
+        # Use CSV handler to export file
+        success, filename, num_exported = self.csv_handler.export_brt_csv(self.df_spedizioni)
 
-        # Filter only completed records
-        df_export = self.df_spedizioni[
-            (self.df_spedizioni[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.EMPTY.value) &
-            (self.df_spedizioni[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.SKIP.value)
-        ].copy()
-
-        if len(df_export) == 0:
-            QMessageBox.warning(self, Messages.TITLE_WARNING,
-                Messages.MSG_NO_RECORDS_TO_EXPORT)
-            return
-
-        # Order columns according to BRT specification
-        colonne_brt = CSVColumns.get_brt_column_order()
-
-        # Add missing columns if necessary
-        for col in colonne_brt:
-            if col not in df_export.columns:
-                df_export[col] = RecordStatus.EMPTY.value
-
-        # Select and order columns
-        df_export = df_export[colonne_brt]
-
-        # Ask where to save
-        default_filename = f"{FileSettings.CSV_EXPORT_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        default_path = Path.home() / "Documents" / default_filename
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            Messages.FILE_DIALOG_TITLE_SAVE,
-            str(default_path),
-            Messages.FILE_DIALOG_FILTER
-        )
-
-        if not file_path:
-            return
-
-        export_path = Path(file_path)
-
-        try:
-            # Export CSV (with header, semicolon separator)
-            df_export.to_csv(str(export_path), sep=';', index=False, header=True, encoding='utf-8')
-
-            logger.info(f"Successfully exported {len(df_export)} shipments to {export_path}")
-
+        if success:
+            # Update export label
             self.export_label.setText(
                 Messages.format(Messages.LABEL_SHIPMENTS_EXPORTED,
-                               count=len(df_export),
-                               filename=export_path.name)
+                               count=num_exported,
+                               filename=filename)
             )
-
-            QMessageBox.information(self, Messages.TITLE_SUCCESS,
-                Messages.format(Messages.MSG_FILE_EXPORTED,
-                               count=len(df_export),
-                               filename=export_path.name))
-
-        except Exception as e:
-            logger.error(f"Failed to export BRT CSV to {export_path}: {e}", exc_info=True)
-            QMessageBox.critical(self, Messages.TITLE_ERROR,
-                Messages.format(Messages.MSG_FILE_EXPORT_ERROR, error=str(e)))
 
 
