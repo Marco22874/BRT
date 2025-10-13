@@ -138,11 +138,13 @@ class NavigationHandler:
         # Look for first skipped record AFTER current index
         for idx in skipped_indices:
             idx_pos = df_spedizioni.index.get_loc(idx)
-            if idx_pos > current_index:
+            # Ensure we have an int (get_loc can return int, slice, or ndarray)
+            if isinstance(idx_pos, int) and idx_pos > current_index:
                 return idx_pos
 
         # If there are none after, take the first one (restart from beginning)
-        return df_spedizioni.index.get_loc(skipped_indices[0])
+        first_pos = df_spedizioni.index.get_loc(skipped_indices[0])
+        return first_pos if isinstance(first_pos, int) else None
 
     def goto_next_skipped(
         self,
@@ -200,7 +202,13 @@ class NavigationHandler:
 
                 if empty_indices:
                     # There are still empty records to fill - go to first empty record
-                    return df_spedizioni.index.get_loc(empty_indices[0])
+                    first_empty_pos = df_spedizioni.index.get_loc(empty_indices[0])
+                    # Ensure we have an int (get_loc can return int, slice, or ndarray)
+                    if isinstance(first_empty_pos, int):
+                        return first_empty_pos
+                    else:
+                        # Fallback to last record if we can't get a valid position
+                        return len(df_spedizioni) - 1
                 else:
                     # All completed! Go to last record
                     return len(df_spedizioni) - 1

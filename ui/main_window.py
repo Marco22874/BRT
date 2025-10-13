@@ -30,7 +30,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "6.1.0"
+__version__ = "6.2.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-13"
 __developer__ = "Marco De Luca"
@@ -1040,7 +1040,10 @@ rm -f "$0"
         is_last_in_filter = self._find_next_matching_record(self.current_filter, self.current_index) is None
         is_last = is_last_in_filter  # Use filter-aware "last" check
 
-        is_first = self.current_index == 0
+        # Check if we're at the first record considering the active filter
+        is_first_in_dataframe = self.current_index == 0
+        is_first_in_filter = self._find_previous_matching_record(self.current_filter, self.current_index) is None
+        is_first = is_first_in_filter  # Use filter-aware "first" check
 
         # Check if current record is processed (completed or skipped)
         current_record = self.df_spedizioni.iloc[self.current_index]
@@ -1076,8 +1079,14 @@ rm -f "$0"
             # During navigation: activate if fields are valid
             can_save = fields_valid
 
-        # Next button: enabled only if not last AND current record is processed
-        next_enabled = not is_last and is_current_processed
+        # Next button: enabled only if not last
+        # When using filters (not ALL), allow navigation without requiring current record to be processed
+        if self.current_filter == FilterType.ALL:
+            # In ALL filter, require current record to be processed before moving to next
+            next_enabled = not is_last and is_current_processed
+        else:
+            # In filtered views, allow free navigation
+            next_enabled = not is_last
 
         # Skip button: disabled when SKIPPED filter is active
         skip_enabled = not is_last and self.current_filter != FilterType.SKIPPED
