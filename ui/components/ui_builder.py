@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Any, Callable
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QLineEdit, QTextEdit, QProgressBar,
-                             QGroupBox, QGridLayout, QAction)
+                             QGroupBox, QGridLayout, QAction, QSpinBox, QDoubleSpinBox)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap
 
@@ -142,7 +142,7 @@ class UIBuilder:
         peso_focus_callback: Callable[[], None],
         save_and_next_callback: Callable[[], None],
         template_callback: Callable[[int, float], None]
-    ) -> tuple[QVBoxLayout, QLineEdit, QLineEdit]:
+    ) -> tuple[QVBoxLayout, QSpinBox, QDoubleSpinBox]:
         """Create the right column with shipment data inputs.
 
         Args:
@@ -164,18 +164,26 @@ class UIBuilder:
         sped_group = QGroupBox()
         sped_layout = QGridLayout()
 
-        # Row 0: Number of packages
+        # Row 0: Number of packages (SpinBox for integer with arrows)
         sped_layout.addWidget(QLabel(Messages.LABEL_NUM_PACKAGES), 0, 0)
-        colli_input = QLineEdit(str(default_colli))
-        colli_input.setMaximumWidth(100)
-        colli_input.returnPressed.connect(peso_focus_callback)
+        colli_input = QSpinBox()
+        colli_input.setMinimum(1)
+        colli_input.setMaximum(999)
+        colli_input.setValue(default_colli)
+        colli_input.setMaximumWidth(80)  # Reduced width for smaller arrows
+        colli_input.setMinimumHeight(28)  # Match height with arrows
         sped_layout.addWidget(colli_input, 0, 1)
 
-        # Row 1: Weight
+        # Row 1: Weight (DoubleSpinBox for decimal with arrows)
         sped_layout.addWidget(QLabel(Messages.LABEL_TOTAL_WEIGHT), 1, 0)
-        peso_input = QLineEdit(str(default_peso))
-        peso_input.setMaximumWidth(100)
-        peso_input.returnPressed.connect(save_and_next_callback)
+        peso_input = QDoubleSpinBox()
+        peso_input.setMinimum(0.1)
+        peso_input.setMaximum(9999.9)
+        peso_input.setDecimals(1)
+        peso_input.setSingleStep(0.1)  # 100 grams increment (0.1 kg)
+        peso_input.setValue(default_peso)
+        peso_input.setMaximumWidth(80)  # Reduced width for smaller arrows
+        peso_input.setMinimumHeight(28)  # Match height with arrows
         sped_layout.addWidget(peso_input, 1, 1)
 
         # Row 2, Column 0: Quick templates label

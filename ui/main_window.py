@@ -21,7 +21,6 @@ from PyQt5.QtGui import QIcon
 from core.constants import (UIConstants, Colors, RecordStatus, FileSettings,
                             BRTDefaults, CSVColumns, Messages)
 from core.utils import MONOSPACE_FONT, logger
-from core.models import validate_shipment_input
 from services.updater import UpdateDownloader, UpdateChecker
 from .dialogs import DownloadDialog, AboutDialog
 from .components.settings_manager import SettingsManager
@@ -31,7 +30,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "4.2.1"
+__version__ = "4.3.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-13"
 __developer__ = "Marco De Luca"
@@ -566,8 +565,8 @@ rm -f "$0"
 
     def apply_template(self, colli: int, peso: float) -> None:
         """Apply quick template"""
-        self.colli_input.setText(str(colli))
-        self.peso_input.setText(str(peso))
+        self.colli_input.setValue(colli)
+        self.peso_input.setValue(peso)
 
     def load_csv(self) -> None:
         """Load and process the CSV file"""
@@ -609,15 +608,9 @@ rm -f "$0"
         Returns:
             Optional[Tuple[int, float]]: (colli, peso) if valid, None if invalid
         """
-        colli = self.colli_input.text().strip()
-        peso = self.peso_input.text().strip()
-
-        colli_int, peso_float, error_msg = validate_shipment_input(colli, peso)
-
-        if error_msg or colli_int is None or peso_float is None:
-            if error_msg:
-                QMessageBox.warning(self, Messages.TITLE_WARNING, error_msg)
-            return None
+        # Get values directly from SpinBox widgets (no validation needed, always valid)
+        colli_int = self.colli_input.value()
+        peso_float = self.peso_input.value()
 
         return (colli_int, peso_float)
 
@@ -735,15 +728,15 @@ rm -f "$0"
         # Load shipment data if already filled (exclude SKIP)
         if (record[CSVColumns.OUTPUT_NUM_COLLI] and  # type: ignore
             record[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.SKIP.value):  # type: ignore
-            self.colli_input.setText(str(record[CSVColumns.OUTPUT_NUM_COLLI]))
+            self.colli_input.setValue(int(record[CSVColumns.OUTPUT_NUM_COLLI]))
         else:
-            self.colli_input.setText(str(self.default_colli))
+            self.colli_input.setValue(self.default_colli)
 
         if (record[CSVColumns.OUTPUT_PESO_KG] and  # type: ignore
             record[CSVColumns.OUTPUT_PESO_KG] != RecordStatus.SKIP.value):  # type: ignore
-            self.peso_input.setText(str(record[CSVColumns.OUTPUT_PESO_KG]))
+            self.peso_input.setValue(float(record[CSVColumns.OUTPUT_PESO_KG]))
         else:
-            self.peso_input.setText(str(self.default_peso))
+            self.peso_input.setValue(self.default_peso)
 
     def _update_progress_display(self) -> None:
         """Update progress bar and summary labels based on cached data."""
@@ -817,10 +810,8 @@ rm -f "$0"
         # Check if all records are completed (NO empty, NO SKIP)
         all_completed = bool((empty_records == 0) and (skipped_records == 0))
 
-        # Validate current input fields
-        colli_valid = self.colli_input.text().strip() != ''
-        peso_valid = self.peso_input.text().strip() != ''
-        fields_valid = colli_valid and peso_valid
+        # SpinBox/DoubleSpinBox always have valid values, so fields are always valid
+        fields_valid = True
 
         # Determine if save is allowed
         if is_last:
