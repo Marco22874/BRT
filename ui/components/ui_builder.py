@@ -138,10 +138,10 @@ class UIBuilder:
     def create_shipment_column(
         self,
         default_colli: int,
-        default_peso: int,
+        default_peso: float,
         peso_focus_callback: Callable[[], None],
         save_and_next_callback: Callable[[], None],
-        template_callback: Callable[[int, int], None]
+        template_callback: Callable[[int, float], None]
     ) -> tuple[QVBoxLayout, QLineEdit, QLineEdit]:
         """Create the right column with shipment data inputs.
 
@@ -182,37 +182,47 @@ class UIBuilder:
         template_label = QLabel(Messages.LABEL_QUICK_TEMPLATES)
         sped_layout.addWidget(template_label, 2, 0)
 
-        template_row = QVBoxLayout()
+        # Grid layout for templates (4 rows x 2 columns)
+        template_grid = QGridLayout()
+        template_grid.setSpacing(5)
 
+        # Row 1
         btn1 = QPushButton(Messages.BTN_TEMPLATE_1)
         btn1.clicked.connect(lambda: template_callback(1, 1.5))
-        template_row.addWidget(btn1)
+        template_grid.addWidget(btn1, 0, 0)
 
         btn2 = QPushButton(Messages.BTN_TEMPLATE_2)
         btn2.clicked.connect(lambda: template_callback(1, 2))
-        template_row.addWidget(btn2)
+        template_grid.addWidget(btn2, 0, 1)
 
+        # Row 2
         btn3 = QPushButton(Messages.BTN_TEMPLATE_3)
         btn3.clicked.connect(lambda: template_callback(1, 2.5))
-        template_row.addWidget(btn3)
+        template_grid.addWidget(btn3, 1, 0)
 
         btn4 = QPushButton(Messages.BTN_TEMPLATE_4)
         btn4.clicked.connect(lambda: template_callback(1, 3))
-        template_row.addWidget(btn4)
+        template_grid.addWidget(btn4, 1, 1)
 
+        # Row 3
         btn5 = QPushButton(Messages.BTN_TEMPLATE_5)
         btn5.clicked.connect(lambda: template_callback(1, 3.5))
-        template_row.addWidget(btn5)
+        template_grid.addWidget(btn5, 2, 0)
 
         btn6 = QPushButton(Messages.BTN_TEMPLATE_6)
         btn6.clicked.connect(lambda: template_callback(1, 4))
-        template_row.addWidget(btn6)
+        template_grid.addWidget(btn6, 2, 1)
 
+        # Row 4
         btn7 = QPushButton(Messages.BTN_TEMPLATE_7)
         btn7.clicked.connect(lambda: template_callback(1, 4.5))
-        template_row.addWidget(btn7)
+        template_grid.addWidget(btn7, 3, 0)
 
-        sped_layout.addLayout(template_row, 2, 1)
+        btn8 = QPushButton(Messages.BTN_TEMPLATE_8)
+        btn8.clicked.connect(lambda: template_callback(1, 5))
+        template_grid.addWidget(btn8, 3, 1)
+
+        sped_layout.addLayout(template_grid, 2, 1)
 
         sped_group.setLayout(sped_layout)
         right_column.addWidget(sped_group)
@@ -269,7 +279,7 @@ class UIBuilder:
         main_layout: QVBoxLayout,
         button_style_getter: Callable[[str], str],
         default_colli: int,
-        default_peso: int,
+        default_peso: float,
         callbacks: Dict[str, Callable]
     ) -> Dict[str, Any]:
         """Create STEP 2: Data entry section.
@@ -389,7 +399,7 @@ class UIBuilder:
         self,
         button_style_getter: Callable[[str], str],
         default_colli: int,
-        default_peso: int,
+        default_peso: float,
         callbacks: Dict[str, Callable]
     ) -> tuple[QWidget, Dict[str, Any]]:
         """Create the main screen by composing all sections.
@@ -434,7 +444,7 @@ class UIBuilder:
         self,
         button_style_getter: Callable[[str], str],
         default_colli: int,
-        default_peso: int,
+        default_peso: float,
         brt_config: Dict[str, str],
         callbacks: Dict[str, Callable[[], None]]
     ) -> tuple[QWidget, Dict[str, QLineEdit]]:

@@ -31,7 +31,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "4.2.0"
+__version__ = "4.2.1"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-13"
 __developer__ = "Marco De Luca"
@@ -564,7 +564,7 @@ rm -f "$0"
             Messages.format(Messages.MSG_UPDATE_DOWNLOAD_ERROR, error=error_msg))
 
 
-    def apply_template(self, colli: int, peso: int) -> None:
+    def apply_template(self, colli: int, peso: float) -> None:
         """Apply quick template"""
         self.colli_input.setText(str(colli))
         self.peso_input.setText(str(peso))

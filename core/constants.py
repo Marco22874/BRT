@@ -299,6 +299,7 @@ class Messages:
     BTN_TEMPLATE_5 = "1 collo - 3.5kg"
     BTN_TEMPLATE_6 = "1 collo - 4kg"
     BTN_TEMPLATE_7 = "1 collo - 4.5kg"
+    BTN_TEMPLATE_8 = "1 collo - 5kg"
 
     # Status Labels
     LABEL_NO_FILE = "Nessun file caricato"
