@@ -164,65 +164,73 @@ class UIBuilder:
         sped_group = QGroupBox()
         sped_layout = QGridLayout()
 
-        # Number of packages
+        # Row 0: Number of packages
         sped_layout.addWidget(QLabel(Messages.LABEL_NUM_PACKAGES), 0, 0)
         colli_input = QLineEdit(str(default_colli))
         colli_input.setMaximumWidth(100)
         colli_input.returnPressed.connect(peso_focus_callback)
         sped_layout.addWidget(colli_input, 0, 1)
 
-        # Weight
+        # Row 1: Weight
         sped_layout.addWidget(QLabel(Messages.LABEL_TOTAL_WEIGHT), 1, 0)
         peso_input = QLineEdit(str(default_peso))
         peso_input.setMaximumWidth(100)
         peso_input.returnPressed.connect(save_and_next_callback)
         sped_layout.addWidget(peso_input, 1, 1)
 
-        # Quick templates
+        # Row 2, Column 0: Quick templates label
         template_label = QLabel(Messages.LABEL_QUICK_TEMPLATES)
-        sped_layout.addWidget(template_label, 2, 0)
+        sped_layout.addWidget(template_label, 2, 0, Qt.AlignTop)
 
-        # Grid layout for templates (4 rows x 2 columns)
-        template_grid = QGridLayout()
-        template_grid.setSpacing(5)
-
-        # Row 1
+        # Row 2-5, Columns 1-2: Template buttons directly in main grid (4 rows x 2 columns)
         btn1 = QPushButton(Messages.BTN_TEMPLATE_1)
+        btn1.setFixedWidth(120)
         btn1.clicked.connect(lambda: template_callback(1, 1.5))
-        template_grid.addWidget(btn1, 0, 0)
+        sped_layout.addWidget(btn1, 2, 1)
 
         btn2 = QPushButton(Messages.BTN_TEMPLATE_2)
+        btn2.setFixedWidth(120)
         btn2.clicked.connect(lambda: template_callback(1, 2))
-        template_grid.addWidget(btn2, 0, 1)
+        sped_layout.addWidget(btn2, 2, 2)
 
-        # Row 2
         btn3 = QPushButton(Messages.BTN_TEMPLATE_3)
+        btn3.setFixedWidth(120)
         btn3.clicked.connect(lambda: template_callback(1, 2.5))
-        template_grid.addWidget(btn3, 1, 0)
+        sped_layout.addWidget(btn3, 3, 1)
 
         btn4 = QPushButton(Messages.BTN_TEMPLATE_4)
+        btn4.setFixedWidth(120)
         btn4.clicked.connect(lambda: template_callback(1, 3))
-        template_grid.addWidget(btn4, 1, 1)
+        sped_layout.addWidget(btn4, 3, 2)
 
-        # Row 3
         btn5 = QPushButton(Messages.BTN_TEMPLATE_5)
+        btn5.setFixedWidth(120)
         btn5.clicked.connect(lambda: template_callback(1, 3.5))
-        template_grid.addWidget(btn5, 2, 0)
+        sped_layout.addWidget(btn5, 4, 1)
 
         btn6 = QPushButton(Messages.BTN_TEMPLATE_6)
+        btn6.setFixedWidth(120)
         btn6.clicked.connect(lambda: template_callback(1, 4))
-        template_grid.addWidget(btn6, 2, 1)
+        sped_layout.addWidget(btn6, 4, 2)
 
-        # Row 4
         btn7 = QPushButton(Messages.BTN_TEMPLATE_7)
+        btn7.setFixedWidth(120)
         btn7.clicked.connect(lambda: template_callback(1, 4.5))
-        template_grid.addWidget(btn7, 3, 0)
+        sped_layout.addWidget(btn7, 5, 1)
 
         btn8 = QPushButton(Messages.BTN_TEMPLATE_8)
+        btn8.setFixedWidth(120)
         btn8.clicked.connect(lambda: template_callback(1, 5))
-        template_grid.addWidget(btn8, 3, 1)
+        sped_layout.addWidget(btn8, 5, 2)
 
-        sped_layout.addLayout(template_grid, 2, 1)
+        # Set column stretch
+        sped_layout.setColumnStretch(0, 0)  # Labels column - no stretch
+        sped_layout.setColumnStretch(1, 1)  # First button column - can stretch
+        sped_layout.setColumnStretch(2, 1)  # Second button column - can stretch
+
+        # Set spacing
+        sped_layout.setHorizontalSpacing(20)
+        sped_layout.setVerticalSpacing(10)
 
         sped_group.setLayout(sped_layout)
         right_column.addWidget(sped_group)
