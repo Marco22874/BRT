@@ -84,6 +84,14 @@ class RecordStatus(Enum):
         return self.value
 
 
+class FilterType(Enum):
+    """Enum for record filter types"""
+    ALL = "all"
+    COMPLETED = "completed"
+    TODO = "todo"
+    SKIPPED = "skipped"
+
+
 class FileSettings:
     """Constants for files and paths"""
     DATA_FILE = "brt_spedizioni_data.json"
@@ -284,12 +292,12 @@ class Messages:
     # Button Labels
     BTN_COMPLETED = "✓ Completato"
     BTN_SAVE_AND_COMPLETE = "✓ Salva e Completa"
-    BTN_SAVE_AND_NEXT = "✓ Salva e Successivo ▶"
+    BTN_SAVE_AND_NEXT = "✓ Salva"
     BTN_LOAD_CSV = "Carica file .csv"
     BTN_EXPORT_CSV = "↑ Esporta CSV per BRT"
     BTN_PREVIOUS = "◀ Precedente"
+    BTN_NEXT = "Successivo ▶"
     BTN_SKIP = "✗ Escludi"
-    BTN_GOTO_SKIPPED = "↻ Vai a Esclusi"
     BTN_BACK = "← Torna Indietro"
     BTN_SAVE_SETTINGS = "✓ Salva Impostazioni"
     BTN_OK = "OK"
@@ -303,6 +311,12 @@ class Messages:
     BTN_TEMPLATE_6 = "1 collo - 4kg"
     BTN_TEMPLATE_7 = "1 collo - 4.5kg"
     BTN_TEMPLATE_8 = "1 collo - 5kg"
+
+    # Filter Buttons
+    BTN_FILTER_ALL = "TUTTI"
+    BTN_FILTER_COMPLETED = "COMPLETATI"
+    BTN_FILTER_TODO = "DA FARE"
+    BTN_FILTER_SKIPPED = "ESCLUSI"
 
     # Status Labels
     LABEL_NO_FILE = "Nessun file caricato"

@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap
 
-from core.constants import UIConstants, FileSettings, Messages
+from core.constants import UIConstants, FileSettings, Messages, FilterType
 from core.utils import get_monospace_font
 from .drag_drop_widget import DragDropWidget
 
@@ -270,15 +270,15 @@ class UIBuilder:
         prev_btn.setStyleSheet(button_style_getter('plain'))
         nav_layout.addWidget(prev_btn)
 
+        next_btn = QPushButton(Messages.BTN_NEXT)
+        next_btn.clicked.connect(callbacks['next'])
+        next_btn.setStyleSheet(button_style_getter('plain'))
+        nav_layout.addWidget(next_btn)
+
         skip_btn = QPushButton(Messages.BTN_SKIP)
         skip_btn.clicked.connect(callbacks['skip'])
         skip_btn.setStyleSheet(button_style_getter('danger'))
         nav_layout.addWidget(skip_btn)
-
-        goto_skipped_btn = QPushButton(Messages.BTN_GOTO_SKIPPED)
-        goto_skipped_btn.clicked.connect(callbacks['goto_skipped'])
-        goto_skipped_btn.setStyleSheet(button_style_getter('warning'))
-        nav_layout.addWidget(goto_skipped_btn)
 
         save_next_btn = QPushButton(Messages.BTN_SAVE_AND_NEXT)
         save_next_btn.clicked.connect(callbacks['save_and_next'])
@@ -287,12 +287,59 @@ class UIBuilder:
 
         buttons = {
             'prev_btn': prev_btn,
+            'next_btn': next_btn,
             'skip_btn': skip_btn,
-            'goto_skipped_btn': goto_skipped_btn,
             'save_next_btn': save_next_btn
         }
 
         return nav_layout, buttons
+
+    def create_filter_buttons(
+        self,
+        button_style_getter: Callable[[str], str],
+        callbacks: Dict[str, Callable[[FilterType], None]]
+    ) -> tuple[QHBoxLayout, Dict[str, QPushButton]]:
+        """Create filter buttons layout (TUTTI, COMPLETATI, DA FARE, ESCLUSI).
+
+        Args:
+            button_style_getter: Function to get button style by type
+            callbacks: Dict with callback for filter change
+
+        Returns:
+            Tuple of (layout, dict of button widgets)
+        """
+        filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(10)
+
+        # Create filter buttons
+        all_btn = QPushButton(Messages.BTN_FILTER_ALL)
+        all_btn.clicked.connect(lambda: callbacks['filter_change'](FilterType.ALL))
+        all_btn.setStyleSheet(button_style_getter('secondary'))
+        filter_layout.addWidget(all_btn)
+
+        completed_btn = QPushButton(Messages.BTN_FILTER_COMPLETED)
+        completed_btn.clicked.connect(lambda: callbacks['filter_change'](FilterType.COMPLETED))
+        completed_btn.setStyleSheet(button_style_getter('plain'))
+        filter_layout.addWidget(completed_btn)
+
+        todo_btn = QPushButton(Messages.BTN_FILTER_TODO)
+        todo_btn.clicked.connect(lambda: callbacks['filter_change'](FilterType.TODO))
+        todo_btn.setStyleSheet(button_style_getter('plain'))
+        filter_layout.addWidget(todo_btn)
+
+        skipped_btn = QPushButton(Messages.BTN_FILTER_SKIPPED)
+        skipped_btn.clicked.connect(lambda: callbacks['filter_change'](FilterType.SKIPPED))
+        skipped_btn.setStyleSheet(button_style_getter('plain'))
+        filter_layout.addWidget(skipped_btn)
+
+        buttons = {
+            'filter_all_btn': all_btn,
+            'filter_completed_btn': completed_btn,
+            'filter_todo_btn': todo_btn,
+            'filter_skipped_btn': skipped_btn
+        }
+
+        return filter_layout, buttons
 
     def create_step2_data_entry(
         self,
@@ -341,18 +388,22 @@ class UIBuilder:
         progress_bar = QProgressBar()
         step2_layout.addWidget(progress_bar)
 
-        # Summary
-        summary_label = QLabel("")
-        summary_label.setAlignment(Qt.AlignCenter)
-        step2_layout.addWidget(summary_label)
+        # Filter buttons (replacing summary label)
+        filter_layout, filter_buttons = self.create_filter_buttons(
+            button_style_getter,
+            {
+                'filter_change': callbacks.get('filter_change', lambda x: None)
+            }
+        )
+        step2_layout.addLayout(filter_layout)
 
         # Navigation buttons
         nav_layout, nav_buttons = self.create_navigation_buttons(
             button_style_getter,
             {
                 'previous': callbacks['previous'],
+                'next': callbacks['next'],
                 'skip': callbacks['skip'],
-                'goto_skipped': callbacks['goto_skipped'],
                 'save_and_next': callbacks['save_and_next_unified']
             }
         )
@@ -367,7 +418,7 @@ class UIBuilder:
             'peso_input': peso_input,
             'progress_label': progress_label,
             'progress_bar': progress_bar,
-            'summary_label': summary_label,
+            **filter_buttons,
             **nav_buttons
         }
 

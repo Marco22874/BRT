@@ -146,6 +146,37 @@ class CsvHandler:
                 Messages.format(Messages.MSG_FILE_LOAD_ERROR, error=str(e)))
             return None
 
+    def _show_skipped_records_warning(self, skipped_count: int) -> bool:
+        """Show warning about skipped records before export.
+
+        Args:
+            skipped_count: Number of skipped records
+
+        Returns:
+            bool: True if user wants to proceed, False if cancelled
+        """
+        msg = QMessageBox(self.parent)
+        msg.setWindowTitle("Attenzione - Record Esclusi")
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText(
+            f"Sono presenti {skipped_count} record esclusi.\n\n"
+            f"Questi record NON saranno inclusi nell'esportazione.\n\n"
+            f"Vuoi procedere con l'esportazione?"
+        )
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg.setDefaultButton(QMessageBox.Yes)
+
+        # Set button text in Italian
+        yes_btn = msg.button(QMessageBox.Yes)
+        no_btn = msg.button(QMessageBox.No)
+        if yes_btn:
+            yes_btn.setText("Sì, Esporta")
+        if no_btn:
+            no_btn.setText("Annulla")
+
+        result = msg.exec_()
+        return result == QMessageBox.Yes
+
     def export_brt_csv(self, df_spedizioni: Optional[pd.DataFrame]) -> Tuple[bool, str, int]:
         """Export final CSV for BRT.
 
@@ -158,6 +189,16 @@ class CsvHandler:
         if df_spedizioni is None:
             QMessageBox.warning(self.parent, Messages.TITLE_WARNING, Messages.MSG_LOAD_CSV_FIRST)
             return False, "", 0
+
+        # Count skipped records
+        skipped_count = int(
+            (df_spedizioni[CSVColumns.OUTPUT_NUM_COLLI] == RecordStatus.SKIP.value).sum()
+        )
+
+        # Show warning if there are skipped records
+        if skipped_count > 0:
+            if not self._show_skipped_records_warning(skipped_count):
+                return False, "", 0  # User cancelled export
 
         # Filter only completed records
         df_export = df_spedizioni[

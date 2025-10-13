@@ -19,7 +19,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
 from core.constants import (UIConstants, Colors, RecordStatus, FileSettings,
-                            BRTDefaults, CSVColumns, Messages)
+                            BRTDefaults, CSVColumns, Messages, FilterType)
 from core.utils import MONOSPACE_FONT, logger
 from services.updater import UpdateDownloader, UpdateChecker
 from .dialogs import DownloadDialog, AboutDialog
@@ -30,7 +30,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "5.1.0"
+__version__ = "6.0.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-13"
 __developer__ = "Marco De Luca"
@@ -80,6 +80,9 @@ class BRTSpedizioniApp(QMainWindow):
         self._cache_empty: int = 0
         self._cache_dirty: bool = True
 
+        # Filter state
+        self.current_filter: FilterType = FilterType.ALL
+
         # Load saved settings
         self.load_settings()
 
@@ -123,10 +126,13 @@ class BRTSpedizioniApp(QMainWindow):
         self.peso_input = main_widgets['peso_input']
         self.progress_label = main_widgets['progress_label']
         self.progress_bar = main_widgets['progress_bar']
-        self.summary_label = main_widgets['summary_label']
+        self.filter_all_btn = main_widgets['filter_all_btn']
+        self.filter_completed_btn = main_widgets['filter_completed_btn']
+        self.filter_todo_btn = main_widgets['filter_todo_btn']
+        self.filter_skipped_btn = main_widgets['filter_skipped_btn']
         self.prev_btn = main_widgets['prev_btn']
+        self.next_btn = main_widgets['next_btn']
         self.skip_btn = main_widgets['skip_btn']
-        self.goto_skipped_btn = main_widgets['goto_skipped_btn']
         self.save_next_btn = main_widgets['save_next_btn']
         self.export_btn = main_widgets['export_btn']
         self.export_label = main_widgets['export_label']
@@ -163,10 +169,11 @@ class BRTSpedizioniApp(QMainWindow):
             'save_and_next': self.save_and_next,
             'template': self.apply_template,
             'previous': self.previous_item,
+            'next': self.next_item,
             'skip': self.skip_item,
-            'goto_skipped': self.goto_next_skipped,
             'save_and_next_unified': self.save_and_next_unified,
-            'export_csv': self.export_brt_csv
+            'export_csv': self.export_brt_csv,
+            'filter_change': self.change_filter
         }
 
         return self.ui_builder.create_main_screen(
@@ -774,15 +781,197 @@ rm -f "$0"
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(completed)
 
-        if empty == 0 and skipped == 0:
-            # All records are completed
-            self.summary_label.setText(
-                Messages.format(Messages.LABEL_SUMMARY_COMPLETE, total=total)
-            )
+        # Update filter button texts with counts
+        self._update_filter_buttons()
+
+    def _update_filter_buttons(self) -> None:
+        """Update filter button texts with record counts and highlight active filter."""
+        if self.df_spedizioni is None:
+            return
+
+        # Update cache if needed
+        self._update_cache()
+
+        # Use cached values
+        total = self._cache_total
+        completed = self._cache_completed
+        skipped = self._cache_skipped
+        empty = self._cache_empty
+
+        # Update button texts with counts and filter icon
+        filter_icon = "▼ "  # Triangle (funnel icon)
+
+        if self.current_filter == FilterType.ALL:
+            self.filter_all_btn.setText(f"{filter_icon}{Messages.BTN_FILTER_ALL} ({total})")
+            self.filter_completed_btn.setText(f"{Messages.BTN_FILTER_COMPLETED} ({completed})")
+            self.filter_todo_btn.setText(f"{Messages.BTN_FILTER_TODO} ({empty})")
+            self.filter_skipped_btn.setText(f"{Messages.BTN_FILTER_SKIPPED} ({skipped})")
+        elif self.current_filter == FilterType.COMPLETED:
+            self.filter_all_btn.setText(f"{Messages.BTN_FILTER_ALL} ({total})")
+            self.filter_completed_btn.setText(f"{filter_icon}{Messages.BTN_FILTER_COMPLETED} ({completed})")
+            self.filter_todo_btn.setText(f"{Messages.BTN_FILTER_TODO} ({empty})")
+            self.filter_skipped_btn.setText(f"{Messages.BTN_FILTER_SKIPPED} ({skipped})")
+        elif self.current_filter == FilterType.TODO:
+            self.filter_all_btn.setText(f"{Messages.BTN_FILTER_ALL} ({total})")
+            self.filter_completed_btn.setText(f"{Messages.BTN_FILTER_COMPLETED} ({completed})")
+            self.filter_todo_btn.setText(f"{filter_icon}{Messages.BTN_FILTER_TODO} ({empty})")
+            self.filter_skipped_btn.setText(f"{Messages.BTN_FILTER_SKIPPED} ({skipped})")
+        elif self.current_filter == FilterType.SKIPPED:
+            self.filter_all_btn.setText(f"{Messages.BTN_FILTER_ALL} ({total})")
+            self.filter_completed_btn.setText(f"{Messages.BTN_FILTER_COMPLETED} ({completed})")
+            self.filter_todo_btn.setText(f"{Messages.BTN_FILTER_TODO} ({empty})")
+            self.filter_skipped_btn.setText(f"{filter_icon}{Messages.BTN_FILTER_SKIPPED} ({skipped})")
+
+        # Highlight active filter button
+        if self.current_filter == FilterType.ALL:
+            self.filter_all_btn.setStyleSheet(self._get_button_style('secondary'))
+            self.filter_completed_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_todo_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_skipped_btn.setStyleSheet(self._get_button_style('plain'))
+        elif self.current_filter == FilterType.COMPLETED:
+            self.filter_all_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_completed_btn.setStyleSheet(self._get_button_style('secondary'))
+            self.filter_todo_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_skipped_btn.setStyleSheet(self._get_button_style('plain'))
+        elif self.current_filter == FilterType.TODO:
+            self.filter_all_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_completed_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_todo_btn.setStyleSheet(self._get_button_style('secondary'))
+            self.filter_skipped_btn.setStyleSheet(self._get_button_style('plain'))
+        elif self.current_filter == FilterType.SKIPPED:
+            self.filter_all_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_completed_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_todo_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_skipped_btn.setStyleSheet(self._get_button_style('secondary'))
+
+    def change_filter(self, filter_type: FilterType) -> None:
+        """Change the active filter and navigate to first matching record.
+
+        Args:
+            filter_type: The filter type to activate
+        """
+        if self.df_spedizioni is None:
+            return
+
+        # Update current filter
+        self.current_filter = filter_type
+
+        # Find first record matching the filter
+        first_matching_idx = self._find_first_matching_record(filter_type)
+
+        if first_matching_idx is not None:
+            self.current_index = first_matching_idx
+            self.show_current_record()
         else:
-            self.summary_label.setText(
-                Messages.format(Messages.LABEL_SUMMARY, completed=completed, empty=empty, skipped=skipped)
-            )
+            # No records match the filter - stay on current record but update UI
+            self._update_filter_buttons()
+
+    def _find_first_matching_record(self, filter_type: FilterType) -> Optional[int]:
+        """Find the first record that matches the given filter.
+
+        Args:
+            filter_type: The filter type to match
+
+        Returns:
+            Optional[int]: Index of first matching record, or None if no match
+        """
+        if self.df_spedizioni is None:
+            return None
+
+        for idx in range(len(self.df_spedizioni)):
+            record = self.df_spedizioni.iloc[idx]
+            num_colli = record[CSVColumns.OUTPUT_NUM_COLLI]
+
+            if filter_type == FilterType.ALL:
+                return 0  # ALL filter shows all records, start from first
+            elif filter_type == FilterType.COMPLETED:
+                # Completed: not empty and not SKIP
+                if num_colli != '' and num_colli != RecordStatus.EMPTY.value and num_colli != RecordStatus.SKIP.value:
+                    return idx
+            elif filter_type == FilterType.TODO:
+                # TODO: empty records
+                if num_colli == '' or num_colli == RecordStatus.EMPTY.value:
+                    return idx
+            elif filter_type == FilterType.SKIPPED:
+                # Skipped: SKIP status
+                if num_colli == RecordStatus.SKIP.value:
+                    return idx
+
+        return None
+
+    def _find_previous_matching_record(self, filter_type: FilterType, current_idx: int) -> Optional[int]:
+        """Find the previous record that matches the given filter.
+
+        Args:
+            filter_type: The filter type to match
+            current_idx: Current record index
+
+        Returns:
+            Optional[int]: Index of previous matching record, or None if no match
+        """
+        if self.df_spedizioni is None or current_idx == 0:
+            return None
+
+        # Search backwards from current index
+        for idx in range(current_idx - 1, -1, -1):
+            if self._record_matches_filter(idx, filter_type):
+                return idx
+
+        return None
+
+    def _find_next_matching_record(self, filter_type: FilterType, current_idx: int) -> Optional[int]:
+        """Find the next record that matches the given filter.
+
+        Args:
+            filter_type: The filter type to match
+            current_idx: Current record index
+
+        Returns:
+            Optional[int]: Index of next matching record, or None if no match
+        """
+        if self.df_spedizioni is None:
+            return None
+
+        total = len(self.df_spedizioni)
+        if current_idx >= total - 1:
+            return None
+
+        # Search forward from current index
+        for idx in range(current_idx + 1, total):
+            if self._record_matches_filter(idx, filter_type):
+                return idx
+
+        return None
+
+    def _record_matches_filter(self, idx: int, filter_type: FilterType) -> bool:
+        """Check if a record at given index matches the filter.
+
+        Args:
+            idx: Record index
+            filter_type: The filter type to match
+
+        Returns:
+            bool: True if record matches filter, False otherwise
+        """
+        if self.df_spedizioni is None:
+            return False
+
+        record = self.df_spedizioni.iloc[idx]
+        num_colli = record[CSVColumns.OUTPUT_NUM_COLLI]
+
+        if filter_type == FilterType.ALL:
+            return True  # ALL filter matches all records
+        elif filter_type == FilterType.COMPLETED:
+            # Completed: not empty and not SKIP
+            return num_colli != '' and num_colli != RecordStatus.EMPTY.value and num_colli != RecordStatus.SKIP.value
+        elif filter_type == FilterType.TODO:
+            # TODO: empty records
+            return num_colli == '' or num_colli == RecordStatus.EMPTY.value
+        elif filter_type == FilterType.SKIPPED:
+            # Skipped: SKIP status
+            return num_colli == RecordStatus.SKIP.value
+
+        return False
 
     def show_current_record(self) -> None:
         """Show the current record by updating all UI components."""
@@ -821,31 +1010,58 @@ rm -f "$0"
         skipped_records = self._cache_skipped
         completed_records = self._cache_completed
 
-        is_last = self.current_index >= total - 1  # type: ignore
+        # Check if we're at the last record considering the active filter
+        is_last_in_dataframe = self.current_index >= total - 1  # type: ignore
+        is_last_in_filter = self._find_next_matching_record(self.current_filter, self.current_index) is None
+        is_last = is_last_in_filter  # Use filter-aware "last" check
+
         is_first = self.current_index == 0
+
+        # Check if current record is processed (completed or skipped)
+        current_record = self.df_spedizioni.iloc[self.current_index]
+        is_current_processed = (
+            current_record[CSVColumns.OUTPUT_NUM_COLLI] != '' and
+            current_record[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.EMPTY.value
+        )
 
         # Check if all records are completed (NO empty, NO SKIP)
         all_completed = bool((empty_records == 0) and (skipped_records == 0))
 
-        # Export is allowed if there is at least one completed record (regardless of skipped records)
-        can_export = completed_records > 0
+        # Export rules:
+        # - Enabled: if all records are completed (no TODO, no SKIPPED)
+        # - Enabled: if there are completed + skipped records (but no TODO)
+        # - Disabled: if there are TODO records
+        # - Disabled: if all records are skipped (no completed)
+        can_export = (completed_records > 0) and (empty_records == 0)
 
         # SpinBox/DoubleSpinBox always have valid values, so fields are always valid
         fields_valid = True
 
         # Determine if save is allowed
         if is_last:
-            # At last record: activate ONLY if there are no skipped records
-            can_save = fields_valid and (skipped_records == 0)
+            # At last record in filter
+            if self.current_filter == FilterType.ALL and is_last_in_dataframe:
+                # Special case: filter TUTTI at absolute last record
+                # Only allow if there's exactly 1 record left to do (the current one)
+                can_save = fields_valid and (empty_records == 1)
+            else:
+                # For all other cases (filtered views), allow saving at last filtered record
+                can_save = fields_valid
         else:
             # During navigation: activate if fields are valid
             can_save = fields_valid
 
+        # Next button: enabled only if not last AND current record is processed
+        next_enabled = not is_last and is_current_processed
+
+        # Skip button: disabled when SKIPPED filter is active
+        skip_enabled = not is_last and self.current_filter != FilterType.SKIPPED
+
         return {
             # Button enable/disable states
             'prev_enabled': not is_first,
-            'skip_enabled': not is_last,
-            'goto_skipped_visible': skipped_records > 0,
+            'next_enabled': next_enabled,
+            'skip_enabled': skip_enabled,
             'save_enabled': can_save if not all_completed else False,
             'export_enabled': can_export,
 
@@ -864,11 +1080,11 @@ rm -f "$0"
         # Previous button
         self.prev_btn.setEnabled(state['prev_enabled'])
 
+        # Next button
+        self.next_btn.setEnabled(state['next_enabled'])
+
         # Skip button
         self.skip_btn.setEnabled(state['skip_enabled'])
-
-        # "Go to Skipped" button
-        self.goto_skipped_btn.setVisible(state['goto_skipped_visible'])
 
         # Save/Next button
         if state['all_completed']:
@@ -883,7 +1099,7 @@ rm -f "$0"
                 # Last record: show "SAVE AND COMPLETE"
                 self.save_next_btn.setText(Messages.BTN_SAVE_AND_COMPLETE)
                 if state['can_save']:
-                    self.save_next_btn.setStyleSheet(self._get_button_style('danger'))
+                    self.save_next_btn.setStyleSheet(self._get_button_style('success'))
                 else:
                     self.save_next_btn.setStyleSheet(self._get_button_style('disabled'))
             else:
@@ -1031,23 +1247,29 @@ rm -f "$0"
         self.show_current_record()
 
     def previous_item(self) -> None:
-        """Go back to previous record"""
+        """Go back to previous record (respecting current filter)"""
 
-        prev_index = self.navigation_handler.go_to_previous(self.df_spedizioni, self.current_index)
+        if self.df_spedizioni is None:
+            return
+
+        # Find previous record matching current filter
+        prev_index = self._find_previous_matching_record(self.current_filter, self.current_index)
 
         if prev_index is not None:
             self.current_index = prev_index
             self.show_current_record()
 
-    def goto_next_skipped(self) -> None:
-        """Go to next skipped record (SKIP)"""
+    def next_item(self) -> None:
+        """Go forward to next record (respecting current filter)"""
 
-        next_skipped = self.navigation_handler.goto_next_skipped(
-            self.df_spedizioni, self.current_index
-        )
+        if self.df_spedizioni is None:
+            return
 
-        if next_skipped is not None:
-            self.current_index = next_skipped
+        # Find next record matching current filter
+        next_index = self._find_next_matching_record(self.current_filter, self.current_index)
+
+        if next_index is not None:
+            self.current_index = next_index
             self.show_current_record()
 
     def save_data_to_file(self) -> None:
