@@ -309,28 +309,69 @@ class UIBuilder:
             Tuple of (layout, dict of button widgets)
         """
         filter_layout = QHBoxLayout()
-        filter_layout.setSpacing(10)
+        filter_layout.setSpacing(8)
+        filter_layout.setContentsMargins(0, 5, 0, 5)
 
-        # Create filter buttons
+        # Pill badge style for filter buttons
+        pill_style_active = """
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 20px;
+                padding: 8px 16px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """
+
+        pill_style_inactive = """
+            QPushButton {
+                background-color: transparent;
+                color: #6c757d;
+                border: 2px solid #dee2e6;
+                border-radius: 20px;
+                padding: 6px 14px;
+                font-size: 11px;
+                font-weight: normal;
+            }
+            QPushButton:hover {
+                background-color: #f8f9fa;
+                border-color: #6c757d;
+            }
+        """
+
+        # Create filter buttons with pill badge style
         all_btn = QPushButton(Messages.BTN_FILTER_ALL)
         all_btn.clicked.connect(lambda: callbacks['filter_change'](FilterType.ALL))
-        all_btn.setStyleSheet(button_style_getter('secondary'))
+        all_btn.setStyleSheet(pill_style_active)
+        all_btn.setCursor(Qt.PointingHandCursor)
         filter_layout.addWidget(all_btn)
 
         completed_btn = QPushButton(Messages.BTN_FILTER_COMPLETED)
         completed_btn.clicked.connect(lambda: callbacks['filter_change'](FilterType.COMPLETED))
-        completed_btn.setStyleSheet(button_style_getter('plain'))
+        completed_btn.setStyleSheet(pill_style_inactive)
+        completed_btn.setCursor(Qt.PointingHandCursor)
         filter_layout.addWidget(completed_btn)
 
         todo_btn = QPushButton(Messages.BTN_FILTER_TODO)
         todo_btn.clicked.connect(lambda: callbacks['filter_change'](FilterType.TODO))
-        todo_btn.setStyleSheet(button_style_getter('plain'))
+        todo_btn.setStyleSheet(pill_style_inactive)
+        todo_btn.setCursor(Qt.PointingHandCursor)
         filter_layout.addWidget(todo_btn)
 
         skipped_btn = QPushButton(Messages.BTN_FILTER_SKIPPED)
         skipped_btn.clicked.connect(lambda: callbacks['filter_change'](FilterType.SKIPPED))
-        skipped_btn.setStyleSheet(button_style_getter('plain'))
+        skipped_btn.setStyleSheet(pill_style_inactive)
+        skipped_btn.setCursor(Qt.PointingHandCursor)
         filter_layout.addWidget(skipped_btn)
+
+        # Add stretch to center the buttons
+        filter_layout.insertStretch(0, 1)
+        filter_layout.addStretch(1)
 
         buttons = {
             'filter_all_btn': all_btn,
@@ -385,10 +426,7 @@ class UIBuilder:
         progress_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         step2_layout.addWidget(progress_label)
 
-        progress_bar = QProgressBar()
-        step2_layout.addWidget(progress_bar)
-
-        # Filter buttons (replacing summary label)
+        # Filter buttons (between progress label and progress bar)
         filter_layout, filter_buttons = self.create_filter_buttons(
             button_style_getter,
             {
@@ -396,6 +434,9 @@ class UIBuilder:
             }
         )
         step2_layout.addLayout(filter_layout)
+
+        progress_bar = QProgressBar()
+        step2_layout.addWidget(progress_bar)
 
         # Navigation buttons
         nav_layout, nav_buttons = self.create_navigation_buttons(

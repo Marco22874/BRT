@@ -41,7 +41,7 @@ class DragDropWidget(QWidget):
 
         # Main label
         self.label = QLabel(
-            "📂 Trascina qui il file CSV\n"
+            "Trascina qui il file CSV\n"
             "oppure clicca per selezionare"
         )
         self.label.setAlignment(Qt.AlignCenter)

@@ -30,7 +30,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "6.0.0"
+__version__ = "6.1.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-13"
 __developer__ = "Marco De Luca"
@@ -678,12 +678,35 @@ rm -f "$0"
                 - 'secondary': Secondary action button (gray)
                 - 'disabled': Disabled button (light gray)
                 - 'success': Success button (green)
+                - 'pill_active': Pill badge active filter button
+                - 'pill_inactive': Pill badge inactive filter button
 
         Returns:
             str: CSS stylesheet string for the button
         """
         # Base style for all buttons
         base_style = "border: none; border-radius: 4px;"
+
+        # Pill badge styles for filter buttons
+        pill_active = """
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 11px;
+            font-weight: bold;
+        """
+
+        pill_inactive = """
+            background-color: transparent;
+            color: #6c757d;
+            border: 2px solid #dee2e6;
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 11px;
+            font-weight: normal;
+        """
 
         # Style configurations
         styles = {
@@ -695,7 +718,9 @@ rm -f "$0"
             'disabled': f"background-color: {Colors.DISABLED}; color: {Colors.DISABLED_TEXT}; {base_style} padding: {UIConstants.BUTTON_PADDING_NORMAL};",
             'disabled_export': f"background-color: {Colors.DISABLED}; color: {Colors.DISABLED_TEXT}; {base_style} padding: {UIConstants.BUTTON_PADDING_EXTRA};",
             'success': f"background-color: {Colors.SUCCESS}; color: {Colors.TEXT_WHITE}; font-weight: bold; {base_style} padding: {UIConstants.BUTTON_PADDING_LARGE};",
-            'plain': f"{base_style} padding: {UIConstants.BUTTON_PADDING_NORMAL};"
+            'plain': f"{base_style} padding: {UIConstants.BUTTON_PADDING_NORMAL};",
+            'pill_active': pill_active,
+            'pill_inactive': pill_inactive
         }
 
         return styles.get(style_type, styles['plain'])
@@ -822,27 +847,27 @@ rm -f "$0"
             self.filter_todo_btn.setText(f"{Messages.BTN_FILTER_TODO} ({empty})")
             self.filter_skipped_btn.setText(f"{filter_icon}{Messages.BTN_FILTER_SKIPPED} ({skipped})")
 
-        # Highlight active filter button
+        # Highlight active filter button with pill badge style
         if self.current_filter == FilterType.ALL:
-            self.filter_all_btn.setStyleSheet(self._get_button_style('secondary'))
-            self.filter_completed_btn.setStyleSheet(self._get_button_style('plain'))
-            self.filter_todo_btn.setStyleSheet(self._get_button_style('plain'))
-            self.filter_skipped_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_all_btn.setStyleSheet(self._get_button_style('pill_active'))
+            self.filter_completed_btn.setStyleSheet(self._get_button_style('pill_inactive'))
+            self.filter_todo_btn.setStyleSheet(self._get_button_style('pill_inactive'))
+            self.filter_skipped_btn.setStyleSheet(self._get_button_style('pill_inactive'))
         elif self.current_filter == FilterType.COMPLETED:
-            self.filter_all_btn.setStyleSheet(self._get_button_style('plain'))
-            self.filter_completed_btn.setStyleSheet(self._get_button_style('secondary'))
-            self.filter_todo_btn.setStyleSheet(self._get_button_style('plain'))
-            self.filter_skipped_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_all_btn.setStyleSheet(self._get_button_style('pill_inactive'))
+            self.filter_completed_btn.setStyleSheet(self._get_button_style('pill_active'))
+            self.filter_todo_btn.setStyleSheet(self._get_button_style('pill_inactive'))
+            self.filter_skipped_btn.setStyleSheet(self._get_button_style('pill_inactive'))
         elif self.current_filter == FilterType.TODO:
-            self.filter_all_btn.setStyleSheet(self._get_button_style('plain'))
-            self.filter_completed_btn.setStyleSheet(self._get_button_style('plain'))
-            self.filter_todo_btn.setStyleSheet(self._get_button_style('secondary'))
-            self.filter_skipped_btn.setStyleSheet(self._get_button_style('plain'))
+            self.filter_all_btn.setStyleSheet(self._get_button_style('pill_inactive'))
+            self.filter_completed_btn.setStyleSheet(self._get_button_style('pill_inactive'))
+            self.filter_todo_btn.setStyleSheet(self._get_button_style('pill_active'))
+            self.filter_skipped_btn.setStyleSheet(self._get_button_style('pill_inactive'))
         elif self.current_filter == FilterType.SKIPPED:
-            self.filter_all_btn.setStyleSheet(self._get_button_style('plain'))
-            self.filter_completed_btn.setStyleSheet(self._get_button_style('plain'))
-            self.filter_todo_btn.setStyleSheet(self._get_button_style('plain'))
-            self.filter_skipped_btn.setStyleSheet(self._get_button_style('secondary'))
+            self.filter_all_btn.setStyleSheet(self._get_button_style('pill_inactive'))
+            self.filter_completed_btn.setStyleSheet(self._get_button_style('pill_inactive'))
+            self.filter_todo_btn.setStyleSheet(self._get_button_style('pill_inactive'))
+            self.filter_skipped_btn.setStyleSheet(self._get_button_style('pill_active'))
 
     def change_filter(self, filter_type: FilterType) -> None:
         """Change the active filter and navigate to first matching record.
