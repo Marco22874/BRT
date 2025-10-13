@@ -56,4 +56,5 @@ htmlcov/
 
 # Logs
 logs/
+core/logs/
 *.log
