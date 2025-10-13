@@ -31,9 +31,9 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
-__release_date__ = "2025-10-12"
+__release_date__ = "2025-10-13"
 __developer__ = "Marco De Luca"
 
 
