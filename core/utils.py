@@ -37,7 +37,7 @@ def setup_logging() -> logging.Logger:
     """
     # Create logs directory if it doesn't exist
     log_dir = Path(__file__).parent / "logs"
-    log_dir.mkdir(exist_ok=True)
+    log_dir.mkdir(exist_ok=True, parents=True)
 
     # Log file path with date
     log_file = log_dir / f"brt_app_{datetime.now().strftime('%Y%m%d')}.log"
