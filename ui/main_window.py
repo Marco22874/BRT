@@ -30,9 +30,9 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "6.2.1"
+__version__ = "6.2.2"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
-__release_date__ = "2025-10-13"
+__release_date__ = "2025-10-14"
 __developer__ = "Marco De Luca"
 
 
@@ -735,7 +735,7 @@ rm -f "$0"
             str: HTML formatted recipient information
         """
         dest_info = (
-            f"<div style='font-family: {MONOSPACE_FONT}; font-size: 12pt;'>"
+            f"<div style='font-family: {MONOSPACE_FONT}; font-size: 11pt;'>"
             f"<span style='font-weight: bold; font-size: 12pt;'>N. Spedizione: {record[CSVColumns.OUTPUT_NUM_SPEDIZIONE]}</span><br>"
             f"Destinatario:  {record[CSVColumns.OUTPUT_RAGIONE_SOCIALE]}<br>"
             f"Indirizzo:     {record[CSVColumns.OUTPUT_INDIRIZZO]}<br>"
@@ -749,17 +749,17 @@ rm -f "$0"
             record[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.EMPTY.value and  # type: ignore
             record[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.SKIP.value):  # type: ignore
             dest_info += (
-                f"<br><br>"
+                f"<br>"
                 f"Colli: {record[CSVColumns.OUTPUT_NUM_COLLI]}<br>"
-                f"Peso: {record[CSVColumns.OUTPUT_PESO_KG]} kg<br>"
-                f"<div style='background-color: {Colors.SUCCESS}; color: white; padding: 5px; margin-top: 5px; font-weight: bold;'>"
+                f"Peso: {record[CSVColumns.OUTPUT_PESO_KG]} kg"
+                f"<div style='background-color: {Colors.SUCCESS}; color: white; padding: 5px; margin-top: 5px; font-size: 12pt; font-weight: bold;'>"
                 f"✓ COMPLETATO"
                 f"</div>"
             )
         elif record[CSVColumns.OUTPUT_NUM_COLLI] == RecordStatus.SKIP.value:  # type: ignore
             dest_info += (
-                f"<br><br>"
-                f"<div style='background-color: {Colors.DANGER}; color: white; padding: 5px; margin-top: 5px; font-weight: bold;'>"
+                f"<br>"
+                f"<div style='background-color: {Colors.DANGER}; color: white; padding: 5px; margin-top: 5px; font-size: 12pt; font-weight: bold;'>"
                 f"✗ ESCLUSO"
                 f"</div>"
             )
