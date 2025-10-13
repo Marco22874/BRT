@@ -75,7 +75,12 @@ class RecordStatus(Enum):
     SKIP = "SKIP"
 
     def __str__(self):
-        """Returns the enum value as a string"""
+        """
+        Returns the enum value as a string.
+
+        Returns:
+            str: The string value of the enum (empty string for EMPTY, "SKIP" for SKIP)
+        """
         return self.value
 
 
@@ -154,7 +159,14 @@ class CSVColumns:
 
     @classmethod
     def get_required_input_columns(cls) -> List[str]:
-        """Returns the list of required columns from the input CSV"""
+        """
+        Returns the list of required columns from the input CSV.
+
+        Returns:
+            List[str]: List of IGEA CSV column names required for processing shipments.
+                Includes: RegisNumero, SpedRagSoc1, SpedIndirizzo, SpedLocalita,
+                SpedLocalita2 (phone), SpedCAP, SpedProvincia, AccompCodPorto
+        """
         return [
             cls.INPUT_NUMERO,
             cls.INPUT_RAGIONE_SOCIALE,
@@ -168,7 +180,13 @@ class CSVColumns:
 
     @classmethod
     def get_column_mapping(cls) -> Dict[str, str]:
-        """Returns the mapping from input columns to output columns"""
+        """
+        Returns the mapping from input columns to output columns.
+
+        Returns:
+            Dict[str, str]: Dictionary mapping IGEA CSV column names (keys) to BRT CSV
+                column names (values). Used for transforming input data to BRT format.
+        """
         return {
             cls.INPUT_NUMERO: cls.OUTPUT_NUM_SPEDIZIONE,
             cls.INPUT_RAGIONE_SOCIALE: cls.OUTPUT_RAGIONE_SOCIALE,
@@ -182,7 +200,13 @@ class CSVColumns:
 
     @classmethod
     def get_brt_column_order(cls) -> List[str]:
-        """Returns the column order for BRT export"""
+        """
+        Returns the column order for BRT export.
+
+        Returns:
+            List[str]: Ordered list of BRT column names in the exact sequence required
+                by BRT's import system. This order must be maintained for successful data import.
+        """
         return [
             cls.OUTPUT_ABBUONO_TB,
             cls.OUTPUT_COD_CLIENTE,

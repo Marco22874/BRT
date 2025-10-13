@@ -17,6 +17,16 @@ class DownloadDialog(QDialog):
     """Custom dialog for showing download progress"""
 
     def __init__(self, parent: Optional[QWidget], filename: str) -> None:
+        """
+        Initialize the download dialog.
+
+        Creates a modal dialog window displaying download progress with a progress bar
+        and status message for the specified file.
+
+        Args:
+            parent: Parent widget for the dialog, or None for a top-level window
+            filename: Name of the file being downloaded, shown in the status message
+        """
         super().__init__(parent)
         self.setWindowTitle(Messages.TITLE_DOWNLOAD)
         self.setModal(True)
@@ -46,7 +56,14 @@ class DownloadDialog(QDialog):
         self.setLayout(layout)
 
     def update_progress(self, progress: int) -> None:
-        """Update the progress bar value"""
+        """
+        Update the progress bar value.
+
+        Updates the visual progress indicator to reflect the current download status.
+
+        Args:
+            progress: Current progress percentage (0-100)
+        """
         self.progress_bar.setValue(progress)
 
 
@@ -55,6 +72,20 @@ class AboutDialog(QDialog):
 
     def __init__(self, parent: Optional[QWidget], app_name: str, version: str,
                  release_date: str, developer: str) -> None:
+        """
+        Initialize the About dialog.
+
+        Creates a dialog displaying application information including logos, version details,
+        and developer information. The dialog shows IGEA and BRT logos side by side with
+        arrows between them.
+
+        Args:
+            parent: Parent widget for the dialog, or None for a top-level window
+            app_name: Name of the application to display
+            version: Version string of the application
+            release_date: Release date string to display
+            developer: Developer/company name
+        """
         super().__init__(parent)
         self.setWindowTitle("Informazioni")
         self.setMinimumWidth(500)

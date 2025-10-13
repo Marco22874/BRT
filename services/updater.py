@@ -22,13 +22,35 @@ class UpdateDownloader(QThread):
     download_failed = pyqtSignal(str)  # Error message
 
     def __init__(self, download_url: str, filename: str, download_path: str) -> None:
+        """
+        Initialize the update downloader thread.
+
+        Args:
+            download_url: Full URL to the update file to download
+            filename: Name to save the downloaded file as
+            download_path: Directory path where the file should be saved
+        """
         super().__init__()
         self.download_url = download_url
         self.filename = filename
         self.download_path = download_path
 
     def run(self) -> None:
-        """Download the file"""
+        """
+        Execute the download operation in a separate thread.
+
+        Downloads the file from the specified URL in chunks, emitting progress updates
+        through the download_progress signal. Upon completion, emits download_complete
+        with the file path, or download_failed with an error message if an exception occurs.
+
+        Signals emitted:
+            download_progress(int): Progress percentage (0-100) during download
+            download_complete(str): Absolute file path when download succeeds
+            download_failed(str): Error message string if download fails
+
+        Raises:
+            No exceptions are raised; errors are caught and emitted via download_failed signal
+        """
         download_dir = Path(self.download_path)
         file_path = download_dir / self.filename
 
@@ -67,12 +89,31 @@ class UpdateChecker(QThread):
     update_available = pyqtSignal(str, str, str)  # (new_version, release_url, download_url)
 
     def __init__(self, current_version: str) -> None:
+        """
+        Initialize the update checker thread.
+
+        Args:
+            current_version: Current application version string in format "X.Y.Z"
+        """
         super().__init__()
         self.current_version = current_version
         self.github_repo = NetworkSettings.GITHUB_REPO
 
     def run(self) -> None:
-        """Check if there's a new version on GitHub"""
+        """
+        Check for new version on GitHub in a separate thread.
+
+        Queries the GitHub API for the latest release, compares it with the current version,
+        and identifies the appropriate download URL for the current platform. If a newer
+        version is found, emits the update_available signal.
+
+        Signals emitted:
+            update_available(str, str, str): Emitted when a newer version is found,
+                with parameters (new_version, release_url, download_url)
+
+        Raises:
+            No exceptions are raised; errors are caught and logged at debug level
+        """
         try:
             # GitHub API call to get the latest release
             url = f"https://api.github.com/repos/{self.github_repo}/releases/latest"
@@ -97,7 +138,20 @@ class UpdateChecker(QThread):
             logger.debug(f"Update check failed (this is normal if offline): {e}")
 
     def _get_platform_download_url(self, assets: List[Dict[str, Any]]) -> str:
-        """Find the correct download URL for the platform"""
+        """
+        Find the correct download URL for the current platform.
+
+        Searches through GitHub release assets to find the appropriate download file
+        based on the operating system. For Windows, looks for files with '_win' or
+        'windows' in the name. For macOS, looks for .zip files without Windows indicators.
+
+        Args:
+            assets: List of asset dictionaries from GitHub API response, each containing
+                'name' and 'browser_download_url' keys
+
+        Returns:
+            str: Download URL for the platform-specific installer, or empty string if not found
+        """
         system = platform.system()
 
         for asset in assets:
@@ -116,7 +170,20 @@ class UpdateChecker(QThread):
         return ''
 
     def _is_newer_version(self, latest: str) -> bool:
-        """Compare versions (format: X.Y.Z)"""
+        """
+        Compare version strings to determine if latest is newer than current.
+
+        Uses semantic versioning comparison (major.minor.patch format). Compares each
+        component from left to right, returning True as soon as a higher version number
+        is found in the latest version.
+
+        Args:
+            latest: Latest version string in format "X.Y.Z" where X, Y, Z are integers
+
+        Returns:
+            bool: True if latest version is newer than current version, False otherwise.
+                Returns False if version strings cannot be parsed.
+        """
         try:
             current_parts = [int(x) for x in self.current_version.split('.')]
             latest_parts = [int(x) for x in latest.split('.')]
