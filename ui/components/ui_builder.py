@@ -185,16 +185,32 @@ class UIBuilder:
         template_row = QVBoxLayout()
 
         btn1 = QPushButton(Messages.BTN_TEMPLATE_1)
-        btn1.clicked.connect(lambda: template_callback(1, 5))
+        btn1.clicked.connect(lambda: template_callback(1, 1.5))
         template_row.addWidget(btn1)
 
         btn2 = QPushButton(Messages.BTN_TEMPLATE_2)
-        btn2.clicked.connect(lambda: template_callback(1, 10))
+        btn2.clicked.connect(lambda: template_callback(1, 2))
         template_row.addWidget(btn2)
 
         btn3 = QPushButton(Messages.BTN_TEMPLATE_3)
-        btn3.clicked.connect(lambda: template_callback(2, 15))
+        btn3.clicked.connect(lambda: template_callback(1, 2.5))
         template_row.addWidget(btn3)
+
+        btn4 = QPushButton(Messages.BTN_TEMPLATE_4)
+        btn4.clicked.connect(lambda: template_callback(1, 3))
+        template_row.addWidget(btn4)
+
+        btn5 = QPushButton(Messages.BTN_TEMPLATE_5)
+        btn5.clicked.connect(lambda: template_callback(1, 3.5))
+        template_row.addWidget(btn5)
+
+        btn6 = QPushButton(Messages.BTN_TEMPLATE_6)
+        btn6.clicked.connect(lambda: template_callback(1, 4))
+        template_row.addWidget(btn6)
+
+        btn7 = QPushButton(Messages.BTN_TEMPLATE_7)
+        btn7.clicked.connect(lambda: template_callback(1, 4.5))
+        template_row.addWidget(btn7)
 
         sped_layout.addLayout(template_row, 2, 1)
 

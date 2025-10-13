@@ -31,7 +31,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "4.1.1"
+__version__ = "4.2.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-13"
 __developer__ = "Marco De Luca"
@@ -75,7 +75,7 @@ class BRTSpedizioniApp(QMainWindow):
 
         # Default settings
         self.default_colli: int = 1
-        self.default_peso: int = 2
+        self.default_peso: float = 1.0
 
         # BRT configurable fields (will be loaded from settings)
         self.brt_customer_code: str = BRTDefaults.DEFAULT_CUSTOMER_CODE

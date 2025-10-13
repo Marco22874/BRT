@@ -16,7 +16,7 @@ from .constants import BRTDefaults, FileSettings
 class AppSettings:
     """Application settings data model"""
     default_colli: int = 1
-    default_peso: float = 2.0
+    default_peso: float = 1.0
     brt_customer_code: str = BRTDefaults.DEFAULT_CUSTOMER_CODE
     brt_alphabetic_ref: str = BRTDefaults.DEFAULT_ALPHABETIC_REF
     brt_goods_type: str = BRTDefaults.DEFAULT_GOODS_TYPE
@@ -49,7 +49,7 @@ class AppSettings:
         """
         return cls(
             default_colli=data.get('default_colli', 1),
-            default_peso=data.get('default_peso', 2.0),
+            default_peso=data.get('default_peso', 1.0),
             brt_customer_code=data.get('brt_customer_code', BRTDefaults.DEFAULT_CUSTOMER_CODE),
             brt_alphabetic_ref=data.get('brt_alphabetic_ref', BRTDefaults.DEFAULT_ALPHABETIC_REF),
             brt_goods_type=data.get('brt_goods_type', BRTDefaults.DEFAULT_GOODS_TYPE),

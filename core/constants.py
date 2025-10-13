@@ -292,9 +292,13 @@ class Messages:
     BTN_OK = "OK"
     BTN_DOWNLOAD_NOW = "Scarica Ora"
     BTN_REMIND_LATER = "Ricordamelo dopo"
-    BTN_TEMPLATE_1 = "1 collo - 5kg"
-    BTN_TEMPLATE_2 = "1 collo - 10kg"
-    BTN_TEMPLATE_3 = "2 colli - 15kg"
+    BTN_TEMPLATE_1 = "1 collo - 1.5kg"
+    BTN_TEMPLATE_2 = "1 collo - 2kg"
+    BTN_TEMPLATE_3 = "1 collo - 2.5kg"
+    BTN_TEMPLATE_4 = "1 collo - 3kg"
+    BTN_TEMPLATE_5 = "1 collo - 3.5kg"
+    BTN_TEMPLATE_6 = "1 collo - 4kg"
+    BTN_TEMPLATE_7 = "1 collo - 4.5kg"
 
     # Status Labels
     LABEL_NO_FILE = "Nessun file caricato"
