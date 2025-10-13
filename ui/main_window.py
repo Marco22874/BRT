@@ -30,7 +30,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "4.4.0"
+__version__ = "5.0.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-13"
 __developer__ = "Marco De Luca"
@@ -800,12 +800,16 @@ rm -f "$0"
         total = self._cache_total
         empty_records = self._cache_empty
         skipped_records = self._cache_skipped
+        completed_records = self._cache_completed
 
         is_last = self.current_index >= total - 1  # type: ignore
         is_first = self.current_index == 0
 
         # Check if all records are completed (NO empty, NO SKIP)
         all_completed = bool((empty_records == 0) and (skipped_records == 0))
+
+        # Export is allowed if there is at least one completed record (regardless of skipped records)
+        can_export = completed_records > 0
 
         # SpinBox/DoubleSpinBox always have valid values, so fields are always valid
         fields_valid = True
@@ -824,7 +828,7 @@ rm -f "$0"
             'skip_enabled': not is_last,
             'goto_skipped_visible': skipped_records > 0,
             'save_enabled': can_save if not all_completed else False,
-            'export_enabled': all_completed,
+            'export_enabled': can_export,
 
             # Button appearance
             'all_completed': all_completed,
