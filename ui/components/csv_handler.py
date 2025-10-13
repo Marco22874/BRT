@@ -58,10 +58,25 @@ class CsvHandler:
         try:
             # Read CSV forcing text columns as strings
             # SpedLocalita2 (phone) and SpedCAP must be strings to avoid float conversion
-            df = pd.read_csv(str(csv_path), sep=';', encoding='utf-8', dtype={
-                CSVColumns.INPUT_TELEFONO: str,
-                CSVColumns.INPUT_CAP: str
-            })
+            # Try multiple encodings (common for Italian Windows files)
+            encodings = ['utf-8', 'windows-1252', 'iso-8859-1', 'cp1252']
+            df = None
+            last_error = None
+
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(str(csv_path), sep=';', encoding=encoding, dtype={
+                        CSVColumns.INPUT_TELEFONO: str,
+                        CSVColumns.INPUT_CAP: str
+                    })
+                    logger.info(f"Successfully read CSV with encoding: {encoding}")
+                    break
+                except UnicodeDecodeError as e:
+                    last_error = e
+                    continue
+
+            if df is None:
+                raise ValueError(f"Unable to decode file with any supported encoding. Last error: {last_error}")
 
             # Verify required columns
             required_cols = CSVColumns.get_required_input_columns()
