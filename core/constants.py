@@ -267,7 +267,7 @@ class Messages:
 
     # Navigation Messages
     MSG_ALREADY_LAST = "Sei già all'ultimo record!\n\nNon ci sono altri clienti da compilare."
-    MSG_NO_SKIPPED = "Non ci sono record saltati da compilare!"
+    MSG_NO_SKIPPED = "Non ci sono record esclusi da compilare!"
 
     # Update Messages
     MSG_UPDATE_AVAILABLE = """<div style='text-align: center;'>
@@ -282,14 +282,14 @@ class Messages:
     MSG_UPDATE_DOWNLOAD_ERROR = "Impossibile scaricare l'aggiornamento:\n\n{error}"
 
     # Button Labels
-    BTN_COMPLETED = "✓ COMPLETATO"
-    BTN_SAVE_AND_COMPLETE = "✓ SALVA E COMPLETA"
-    BTN_SAVE_AND_NEXT = "✓ SALVA E SUCCESSIVO ▶"
+    BTN_COMPLETED = "✓ Completato"
+    BTN_SAVE_AND_COMPLETE = "✓ Salva e Completa"
+    BTN_SAVE_AND_NEXT = "✓ Salva e Successivo ▶"
     BTN_LOAD_CSV = "Carica file .csv"
     BTN_EXPORT_CSV = "↑ Esporta CSV per BRT"
     BTN_PREVIOUS = "◀ Precedente"
-    BTN_SKIP = "Salta"
-    BTN_GOTO_SKIPPED = "↻ Vai a Saltati"
+    BTN_SKIP = "✗ Escludi"
+    BTN_GOTO_SKIPPED = "↻ Vai a Esclusi"
     BTN_BACK = "← Torna Indietro"
     BTN_SAVE_SETTINGS = "✓ Salva Impostazioni"
     BTN_OK = "OK"
@@ -309,9 +309,9 @@ class Messages:
     LABEL_FILE_LOADED = "✓ {filename}"
     LABEL_SHIPMENTS_LOADED = "✓ {count} spedizioni caricate ({duplicates} duplicati rimossi)"
     LABEL_SHIPMENTS_EXPORTED = "✓ Esportate {count} spedizioni in:\n{filename}"
-    LABEL_PROGRESS = "Cliente {current}/{total} ({percent}%)"
+    LABEL_PROGRESS = "Spedizione {current}/{total} ({percent}%)"
     LABEL_PROGRESS_DEFAULT = "0/0 (0%)"
-    LABEL_SUMMARY = "COMPLETATI: {completed} ✓  |  DA FARE: {empty}  |  SALTATI: {skipped}"
+    LABEL_SUMMARY = "COMPLETATI: {completed} ✓  |  DA FARE: {empty}  |  ESCLUSI: {skipped}"
     LABEL_SUMMARY_COMPLETE = "<span style='background-color: #28a745; color: white; padding: 5px 10px; font-weight: bold; border-radius: 3px;'>✓ COMPLETO - Tutti i {total} record compilati!</span>"
 
     # UI Section Titles

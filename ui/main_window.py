@@ -30,7 +30,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "5.0.0"
+__version__ = "5.1.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-13"
 __developer__ = "Marco De Luca"
@@ -117,6 +117,7 @@ class BRTSpedizioniApp(QMainWindow):
         # Assign widget references
         self.file_label = main_widgets['file_label']
         self.info_label = main_widgets['info_label']
+        self.drag_drop_widget = main_widgets['drag_drop_widget']
         self.dest_text = main_widgets['dest_text']
         self.colli_input = main_widgets['colli_input']
         self.peso_input = main_widgets['peso_input']
@@ -129,6 +130,9 @@ class BRTSpedizioniApp(QMainWindow):
         self.save_next_btn = main_widgets['save_next_btn']
         self.export_btn = main_widgets['export_btn']
         self.export_label = main_widgets['export_label']
+
+        # Connect drag & drop signal
+        self.drag_drop_widget.file_selected.connect(self.load_csv_from_path)
 
         # Assign settings input references
         self.settings_colli_input = settings_inputs['settings_colli_input']
@@ -565,8 +569,23 @@ rm -f "$0"
         self.peso_input.setValue(peso)
 
     def load_csv(self) -> None:
-        """Load and process the CSV file"""
+        """Load and process the CSV file (via file dialog)"""
+        self._load_csv_internal(file_path=None)
 
+    def load_csv_from_path(self, file_path: str) -> None:
+        """Load and process the CSV file from a specific path (drag & drop).
+
+        Args:
+            file_path: Path to the CSV file
+        """
+        self._load_csv_internal(file_path=file_path)
+
+    def _load_csv_internal(self, file_path: Optional[str] = None) -> None:
+        """Internal method to load and process the CSV file.
+
+        Args:
+            file_path: Optional path to CSV file. If None, shows file dialog.
+        """
         # Prepare BRT configuration
         brt_config = {
             'brt_customer_code': self.brt_customer_code,
@@ -578,7 +597,7 @@ rm -f "$0"
         }
 
         # Use CSV handler to load file
-        result = self.csv_handler.load_csv(brt_config)
+        result = self.csv_handler.load_csv(brt_config, file_path=file_path)
 
         if result is not None:
             df_unique, filename, num_rows, duplicates = result
@@ -684,8 +703,8 @@ rm -f "$0"
             str: HTML formatted recipient information
         """
         dest_info = (
-            f"<div style='font-family: {MONOSPACE_FONT}; font-size: 10pt;'>"
-            f"N. Spedizione: {record[CSVColumns.OUTPUT_NUM_SPEDIZIONE]}<br>"
+            f"<div style='font-family: {MONOSPACE_FONT}; font-size: 12pt;'>"
+            f"<span style='font-weight: bold; font-size: 12pt;'>N. Spedizione: {record[CSVColumns.OUTPUT_NUM_SPEDIZIONE]}</span><br>"
             f"Destinatario:  {record[CSVColumns.OUTPUT_RAGIONE_SOCIALE]}<br>"
             f"Indirizzo:     {record[CSVColumns.OUTPUT_INDIRIZZO]}<br>"
             f"CAP:           {record[CSVColumns.OUTPUT_CAP]}    Città: {record[CSVColumns.OUTPUT_LOCALITA]}<br>"
@@ -702,14 +721,14 @@ rm -f "$0"
                 f"Colli: {record[CSVColumns.OUTPUT_NUM_COLLI]}<br>"
                 f"Peso: {record[CSVColumns.OUTPUT_PESO_KG]} kg<br>"
                 f"<div style='background-color: {Colors.SUCCESS}; color: white; padding: 5px; margin-top: 5px; font-weight: bold;'>"
-                f"✓ SALVATO"
+                f"✓ COMPLETATO"
                 f"</div>"
             )
         elif record[CSVColumns.OUTPUT_NUM_COLLI] == RecordStatus.SKIP.value:  # type: ignore
             dest_info += (
                 f"<br><br>"
-                f"<div style='background-color: #dc3545; color: white; padding: 5px; margin-top: 5px; font-weight: bold;'>"
-                f"✗ SALTATO"
+                f"<div style='background-color: {Colors.DANGER}; color: white; padding: 5px; margin-top: 5px; font-weight: bold;'>"
+                f"✗ ESCLUSO"
                 f"</div>"
             )
 
@@ -871,7 +890,7 @@ rm -f "$0"
                 # Regular record: show "SAVE AND NEXT"
                 self.save_next_btn.setText(Messages.BTN_SAVE_AND_NEXT)
                 if state['can_save']:
-                    self.save_next_btn.setStyleSheet(self._get_button_style('primary'))
+                    self.save_next_btn.setStyleSheet(self._get_button_style('success'))
                 else:
                     self.save_next_btn.setStyleSheet(self._get_button_style('disabled'))
 

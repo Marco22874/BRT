@@ -28,7 +28,7 @@ class CsvHandler:
         self.parent = parent
         self.save_file = save_file
 
-    def load_csv(self, brt_config: Dict[str, str]) -> Optional[Tuple[pd.DataFrame, str, int, int]]:
+    def load_csv(self, brt_config: Dict[str, str], file_path: Optional[str] = None) -> Optional[Tuple[pd.DataFrame, str, int, int]]:
         """Load and process the CSV file.
 
         Args:
@@ -39,20 +39,23 @@ class CsvHandler:
                 - brt_tariff_code
                 - brt_service_type
                 - brt_note
+            file_path: Optional direct file path (for drag & drop). If None, shows file dialog.
 
         Returns:
             Optional[Tuple[pd.DataFrame, str, int, int]]: (DataFrame, filename, num_rows, duplicates) or None if cancelled/error
         """
-        default_dir = Path.home() / "Documents"
-        file_path, _ = QFileDialog.getOpenFileName(
-            self.parent,
-            Messages.FILE_DIALOG_TITLE_LOAD,
-            str(default_dir),
-            Messages.FILE_DIALOG_FILTER
-        )
+        # If no file path provided, show file dialog
+        if file_path is None:
+            default_dir = Path.home() / "Documents"
+            file_path, _ = QFileDialog.getOpenFileName(
+                self.parent,
+                Messages.FILE_DIALOG_TITLE_LOAD,
+                str(default_dir),
+                Messages.FILE_DIALOG_FILTER
+            )
 
-        if not file_path:
-            return None
+            if not file_path:
+                return None
 
         csv_path = Path(file_path)
 

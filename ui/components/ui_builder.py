@@ -13,6 +13,7 @@ from PyQt5.QtGui import QFont, QPixmap
 
 from core.constants import UIConstants, FileSettings, Messages
 from core.utils import get_monospace_font
+from .drag_drop_widget import DragDropWidget
 
 
 class UIBuilder:
@@ -70,42 +71,44 @@ class UIBuilder:
         self,
         main_layout: QVBoxLayout,
         load_csv_callback: Callable[[], None]
-    ) -> Dict[str, QLabel]:
-        """Create STEP 1: File loading section.
+    ) -> Dict[str, Any]:
+        """Create STEP 1: File loading section with drag & drop support.
 
         Args:
             main_layout: Main layout to add this section to
             load_csv_callback: Callback for load CSV button
 
         Returns:
-            Dict with widget references: {'file_label', 'info_label'}
+            Dict with widget references: {'file_label', 'info_label', 'drag_drop_widget'}
         """
         step1_title = QLabel(Messages.SECTION_STEP1)
-        step1_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 20px; margin-bottom: 8px;")
+        step1_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 5px; margin-bottom: 3px;")
         main_layout.addWidget(step1_title)
 
-        step1_group = QGroupBox()
-        step1_layout = QHBoxLayout()
-        step1_layout.setContentsMargins(10, 10, 10, 15)
+        # Create drag & drop widget
+        drag_drop_widget = DragDropWidget(load_csv_callback)
+        main_layout.addWidget(drag_drop_widget)
 
+        # Info row layout (file info + shipment info on same row)
+        info_row_layout = QHBoxLayout()
+        info_row_layout.setSpacing(20)
+        info_row_layout.setContentsMargins(0, 5, 0, 0)
+
+        # File name label (left column)
         file_label = QLabel(Messages.LABEL_NO_FILE)
-        step1_layout.addWidget(file_label)
+        file_label.setStyleSheet("color: #666666;")
+        info_row_layout.addWidget(file_label)
 
-        step1_layout.addStretch()
-
-        load_btn = QPushButton(Messages.BTN_LOAD_CSV)
-        load_btn.clicked.connect(load_csv_callback)
-        step1_layout.addWidget(load_btn)
-
-        step1_group.setLayout(step1_layout)
-        main_layout.addWidget(step1_group)
-
-        # Separate info label (outside the group box)
+        # Success info label (right column)
         info_label = QLabel("")
         info_label.setStyleSheet("color: green; font-weight: bold;")
-        main_layout.addWidget(info_label)
+        info_row_layout.addWidget(info_label)
 
-        return {'file_label': file_label, 'info_label': info_label}
+        info_row_layout.addStretch()  # Push content to the left
+
+        main_layout.addLayout(info_row_layout)
+
+        return {'file_label': file_label, 'info_label': info_label, 'drag_drop_widget': drag_drop_widget}
 
     def create_recipient_column(self) -> tuple[QVBoxLayout, QTextEdit]:
         """Create the left column with recipient data display.
@@ -116,7 +119,7 @@ class UIBuilder:
         left_column = QVBoxLayout()
 
         dest_title = QLabel(Messages.LABEL_RECIPIENT)
-        dest_title.setStyleSheet("font-weight: bold; margin-top: 10px; margin-bottom: 5px;")
+        dest_title.setStyleSheet("font-weight: bold; margin-top: 5px; margin-bottom: 3px;")
         left_column.addWidget(dest_title)
 
         dest_group = QGroupBox()
@@ -158,7 +161,7 @@ class UIBuilder:
         right_column = QVBoxLayout()
 
         sped_title = QLabel(Messages.LABEL_SHIPMENT_DATA)
-        sped_title.setStyleSheet("font-weight: bold; margin-top: 10px; margin-bottom: 5px;")
+        sped_title.setStyleSheet("font-weight: bold; margin-top: 5px; margin-bottom: 3px;")
         right_column.addWidget(sped_title)
 
         sped_group = QGroupBox()
@@ -269,7 +272,7 @@ class UIBuilder:
 
         skip_btn = QPushButton(Messages.BTN_SKIP)
         skip_btn.clicked.connect(callbacks['skip'])
-        skip_btn.setStyleSheet(button_style_getter('plain'))
+        skip_btn.setStyleSheet(button_style_getter('danger'))
         nav_layout.addWidget(skip_btn)
 
         goto_skipped_btn = QPushButton(Messages.BTN_GOTO_SKIPPED)
@@ -279,7 +282,7 @@ class UIBuilder:
 
         save_next_btn = QPushButton(Messages.BTN_SAVE_AND_NEXT)
         save_next_btn.clicked.connect(callbacks['save_and_next'])
-        save_next_btn.setStyleSheet(button_style_getter('primary'))
+        save_next_btn.setStyleSheet(button_style_getter('success'))
         nav_layout.addWidget(save_next_btn)
 
         buttons = {
@@ -312,7 +315,7 @@ class UIBuilder:
             Dict with widget references
         """
         step2_title = QLabel(Messages.SECTION_STEP2)
-        step2_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 0px; margin-bottom: 8px;")
+        step2_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 5px; margin-bottom: 3px;")
         main_layout.addWidget(step2_title)
 
         step2_group = QGroupBox()
@@ -385,12 +388,12 @@ class UIBuilder:
             Dict with widget references: {'export_btn', 'export_label'}
         """
         step3_title = QLabel(Messages.SECTION_STEP3)
-        step3_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 20px; margin-bottom: 8px;")
+        step3_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 10px; margin-bottom: 3px;")
         main_layout.addWidget(step3_title)
 
         step3_group = QGroupBox()
         step3_layout = QHBoxLayout()
-        step3_layout.setContentsMargins(10, 10, 10, 15)
+        step3_layout.setContentsMargins(10, 8, 10, 8)
 
         step3_layout.addStretch()  # Space to center the button
 
@@ -435,8 +438,8 @@ class UIBuilder:
 
         # Main layout
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(10)  # Reduced spacing between main elements
-        main_layout.setContentsMargins(10, 20, 10, 10)  # Top margin to distance logos from edge
+        main_layout.setSpacing(5)  # Reduced spacing between main elements
+        main_layout.setContentsMargins(10, 15, 10, 10)  # Top margin to distance logos from edge
         main_widget.setLayout(main_layout)
 
         # Add all sections
@@ -451,6 +454,9 @@ class UIBuilder:
         step3_widgets = self.create_step3_export(
             main_layout, button_style_getter, callbacks['export_csv']
         )
+
+        # Add stretch at the end to push everything up and reduce empty space at bottom
+        main_layout.addStretch()
 
         # Combine all widget references
         all_widgets = {**step1_widgets, **step2_widgets, **step3_widgets}
