@@ -103,9 +103,10 @@ class BRTDefaults:
     DEFAULT_ALPHABETIC_REF = 'IGEA SRL'
 
     # Shipment defaults
-    DEFAULT_GOODS_TYPE = 'DISPOSITIVI MEDICI'
+    DEFAULT_GOODS_TYPE = 'DISP. MEDICI'
     DEFAULT_TARIFF_CODE = '100'
     DEFAULT_SERVICE_TYPE = 'C'  # Express service
+    DEFAULT_NOTE = 'Chiamare prima della consegna'
 
     # Fixed values for Italy
     DEFAULT_ABBUONO = ''  # Empty for Italy
@@ -156,6 +157,7 @@ class CSVColumns:
     OUTPUT_COD_TARIFFA = "VABCTR"
     OUTPUT_NAZIONE_DEST = "VABNZD"
     OUTPUT_TIPO_SERVIZIO = "VABTSP"
+    OUTPUT_NOTE = "VABNOT"
 
     @classmethod
     def get_required_input_columns(cls) -> List[str]:
@@ -226,7 +228,8 @@ class CSVColumns:
             cls.OUTPUT_RIF_MITTENTE,
             cls.OUTPUT_RIF_ALFABETICO,
             cls.OUTPUT_TELEFONO_REF,
-            cls.OUTPUT_CELLULARE
+            cls.OUTPUT_CELLULARE,
+            cls.OUTPUT_NOTE
         ]
 
 
@@ -329,6 +332,7 @@ class Messages:
     LABEL_GOODS_TYPE = "Natura Spedizione:"
     LABEL_TARIFF_CODE = "Codice Tariffa:"
     LABEL_SERVICE_TYPE = "Tipo Servizio:"
+    LABEL_NOTE = "Note:"
 
     # Settings Screen
     SETTINGS_TITLE = "IMPOSTAZIONI"

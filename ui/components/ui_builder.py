@@ -124,7 +124,7 @@ class UIBuilder:
 
         dest_text = QTextEdit()
         dest_text.setReadOnly(True)
-        dest_text.setFixedHeight(150)
+        dest_text.setFixedHeight(200)  # Increased height for better visibility
         dest_text.setStyleSheet("background-color: #f0f0f0; color: #000000;")
         font = QFont(get_monospace_font(), 10)
         dest_text.setFont(font)
@@ -241,6 +241,7 @@ class UIBuilder:
         sped_layout.setVerticalSpacing(10)
 
         sped_group.setLayout(sped_layout)
+        sped_group.setMinimumHeight(230)  # Match height with dest_group (200px text + margins)
         right_column.addWidget(sped_group)
 
         return right_column, colli_input, peso_input
@@ -535,10 +536,11 @@ class UIBuilder:
         settings_alphabetic_ref_input.setMaximumWidth(300)
         brt_layout.addWidget(settings_alphabetic_ref_input, 1, 1)
 
-        # Goods type
+        # Goods type (max 15 characters)
         brt_layout.addWidget(QLabel(Messages.LABEL_GOODS_TYPE), 2, 0)
         settings_goods_type_input = QLineEdit(brt_config['brt_goods_type'])
         settings_goods_type_input.setMaximumWidth(300)
+        settings_goods_type_input.setMaxLength(15)  # BRT limit: 15 characters
         brt_layout.addWidget(settings_goods_type_input, 2, 1)
 
         # Tariff code
@@ -552,6 +554,13 @@ class UIBuilder:
         settings_service_type_input = QLineEdit(brt_config['brt_service_type'])
         settings_service_type_input.setMaximumWidth(300)
         brt_layout.addWidget(settings_service_type_input, 4, 1)
+
+        # Note (max 35 characters)
+        brt_layout.addWidget(QLabel(Messages.LABEL_NOTE), 5, 0)
+        settings_note_input = QLineEdit(brt_config['brt_note'])
+        settings_note_input.setMaximumWidth(300)
+        settings_note_input.setMaxLength(35)  # BRT limit: 35 characters
+        brt_layout.addWidget(settings_note_input, 5, 1)
 
         brt_group.setLayout(brt_layout)
         layout.addWidget(brt_group)
@@ -586,7 +595,8 @@ class UIBuilder:
             'settings_alphabetic_ref_input': settings_alphabetic_ref_input,
             'settings_goods_type_input': settings_goods_type_input,
             'settings_tariff_code_input': settings_tariff_code_input,
-            'settings_service_type_input': settings_service_type_input
+            'settings_service_type_input': settings_service_type_input,
+            'settings_note_input': settings_note_input
         }
 
         return settings_widget, inputs

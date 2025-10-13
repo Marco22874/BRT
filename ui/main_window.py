@@ -30,7 +30,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "4.3.0"
+__version__ = "4.4.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-13"
 __developer__ = "Marco De Luca"
@@ -38,17 +38,6 @@ __developer__ = "Marco De Luca"
 
 class BRTSpedizioniApp(QMainWindow):
     """Main application for BRT shipping management"""
-
-    # BRT fixed fields configuration
-    CAMPI_FISSI = {
-        'VABATB': '',  # empty for Italy
-        'VABCCM': '0091808',  # Customer code
-        'VABNAS': 'DISPOSITIVI MEDICI',  # Goods type
-        'VABRMA': 'IGEA SRL',  # Alphabetic reference
-        'VABCTR': '100',  # Tariff code
-        'VABNZD': '',  # empty for Italy
-        'VABTSP': 'C',  # Express service
-    }
 
     def __init__(self) -> None:
         super().__init__()
@@ -82,6 +71,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.brt_goods_type: str = BRTDefaults.DEFAULT_GOODS_TYPE
         self.brt_tariff_code: str = BRTDefaults.DEFAULT_TARIFF_CODE
         self.brt_service_type: str = BRTDefaults.DEFAULT_SERVICE_TYPE
+        self.brt_note: str = BRTDefaults.DEFAULT_NOTE
 
         # Cache for DataFrame counts (to avoid repeated calculations)
         self._cache_total: int = 0
@@ -148,6 +138,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.settings_goods_type_input = settings_inputs['settings_goods_type_input']
         self.settings_tariff_code_input = settings_inputs['settings_tariff_code_input']
         self.settings_service_type_input = settings_inputs['settings_service_type_input']
+        self.settings_note_input = settings_inputs['settings_note_input']
 
         # Add screens to stack
         self.stacked_widget.addWidget(self.main_screen)
@@ -192,7 +183,8 @@ class BRTSpedizioniApp(QMainWindow):
             'brt_alphabetic_ref': self.brt_alphabetic_ref,
             'brt_goods_type': self.brt_goods_type,
             'brt_tariff_code': self.brt_tariff_code,
-            'brt_service_type': self.brt_service_type
+            'brt_service_type': self.brt_service_type,
+            'brt_note': self.brt_note
         }
 
         callbacks = {
@@ -246,6 +238,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.settings_goods_type_input.setText(self.brt_goods_type)
         self.settings_tariff_code_input.setText(self.brt_tariff_code)
         self.settings_service_type_input.setText(self.brt_service_type)
+        self.settings_note_input.setText(self.brt_note)
 
         self.stacked_widget.setCurrentWidget(self.settings_screen)
 
@@ -280,6 +273,7 @@ class BRTSpedizioniApp(QMainWindow):
             self.brt_goods_type = self.settings_goods_type_input.text().strip()
             self.brt_tariff_code = self.settings_tariff_code_input.text().strip()
             self.brt_service_type = self.settings_service_type_input.text().strip()
+            self.brt_note = self.settings_note_input.text().strip()
 
             # Save to file using SettingsManager
             settings_data = {
@@ -289,7 +283,8 @@ class BRTSpedizioniApp(QMainWindow):
                 'brt_alphabetic_ref': self.brt_alphabetic_ref,
                 'brt_goods_type': self.brt_goods_type,
                 'brt_tariff_code': self.brt_tariff_code,
-                'brt_service_type': self.brt_service_type
+                'brt_service_type': self.brt_service_type,
+                'brt_note': self.brt_note
             }
 
             self.settings_manager.save(settings_data)
@@ -317,6 +312,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.brt_goods_type = settings['brt_goods_type']
         self.brt_tariff_code = settings['brt_tariff_code']
         self.brt_service_type = settings['brt_service_type']
+        self.brt_note = settings.get('brt_note', BRTDefaults.DEFAULT_NOTE)  # Use default if not present
 
     def check_for_updates(self) -> None:
         """Start update check in background"""
@@ -577,7 +573,8 @@ rm -f "$0"
             'brt_goods_type': self.brt_goods_type,
             'brt_alphabetic_ref': self.brt_alphabetic_ref,
             'brt_tariff_code': self.brt_tariff_code,
-            'brt_service_type': self.brt_service_type
+            'brt_service_type': self.brt_service_type,
+            'brt_note': self.brt_note
         }
 
         # Use CSV handler to load file

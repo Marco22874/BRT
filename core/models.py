@@ -22,6 +22,7 @@ class AppSettings:
     brt_goods_type: str = BRTDefaults.DEFAULT_GOODS_TYPE
     brt_tariff_code: str = BRTDefaults.DEFAULT_TARIFF_CODE
     brt_service_type: str = BRTDefaults.DEFAULT_SERVICE_TYPE
+    brt_note: str = BRTDefaults.DEFAULT_NOTE
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -54,7 +55,8 @@ class AppSettings:
             brt_alphabetic_ref=data.get('brt_alphabetic_ref', BRTDefaults.DEFAULT_ALPHABETIC_REF),
             brt_goods_type=data.get('brt_goods_type', BRTDefaults.DEFAULT_GOODS_TYPE),
             brt_tariff_code=data.get('brt_tariff_code', BRTDefaults.DEFAULT_TARIFF_CODE),
-            brt_service_type=data.get('brt_service_type', BRTDefaults.DEFAULT_SERVICE_TYPE)
+            brt_service_type=data.get('brt_service_type', BRTDefaults.DEFAULT_SERVICE_TYPE),
+            brt_note=data.get('brt_note', BRTDefaults.DEFAULT_NOTE)
         )
 
     def save_to_file(self, file_path: Path) -> None:

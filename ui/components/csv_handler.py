@@ -38,6 +38,7 @@ class CsvHandler:
                 - brt_alphabetic_ref
                 - brt_tariff_code
                 - brt_service_type
+                - brt_note
 
         Returns:
             Optional[Tuple[pd.DataFrame, str, int, int]]: (DataFrame, filename, num_rows, duplicates) or None if cancelled/error
@@ -118,6 +119,7 @@ class CsvHandler:
             df_unique[CSVColumns.OUTPUT_COD_TARIFFA] = brt_config['brt_tariff_code']
             df_unique[CSVColumns.OUTPUT_NAZIONE_DEST] = BRTDefaults.DEFAULT_COUNTRY_DEST
             df_unique[CSVColumns.OUTPUT_TIPO_SERVIZIO] = brt_config['brt_service_type']
+            df_unique[CSVColumns.OUTPUT_NOTE] = brt_config['brt_note']
 
             # Delete saved JSON (new file = new session)
             if self.save_file.exists():
