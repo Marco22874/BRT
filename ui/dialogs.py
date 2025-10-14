@@ -71,7 +71,7 @@ class AboutDialog(QDialog):
     """About dialog showing application information"""
 
     def __init__(self, parent: Optional[QWidget], app_name: str, version: str,
-                 release_date: str, developer: str) -> None:
+                 release_date: str, developer: str, resource_path: Path) -> None:
         """
         Initialize the About dialog.
 
@@ -85,8 +85,10 @@ class AboutDialog(QDialog):
             version: Version string of the application
             release_date: Release date string to display
             developer: Developer/company name
+            resource_path: Path to resources directory for logos
         """
         super().__init__(parent)
+        self.resource_path = resource_path
         self.setWindowTitle("Informazioni")
         self.setMinimumWidth(500)
 
@@ -101,7 +103,7 @@ class AboutDialog(QDialog):
 
         # IGEA logo (left)
         igea_logo = QLabel()
-        igea_logo_path = Path(__file__).parent.parent / FileSettings.LOGO_IGEA
+        igea_logo_path = self.resource_path / FileSettings.LOGO_IGEA
         if igea_logo_path.exists():
             pixmap_igea = QPixmap(str(igea_logo_path))
             scaled_igea = pixmap_igea.scaledToHeight(UIConstants.LOGO_HEIGHT_DIALOG, Qt.SmoothTransformation)
@@ -117,7 +119,7 @@ class AboutDialog(QDialog):
 
         # BRT logo (right)
         brt_logo = QLabel()
-        brt_logo_path = Path(__file__).parent.parent / FileSettings.LOGO_BRT
+        brt_logo_path = self.resource_path / FileSettings.LOGO_BRT
         if brt_logo_path.exists():
             pixmap_brt = QPixmap(str(brt_logo_path))
             scaled_brt = pixmap_brt.scaledToHeight(UIConstants.LOGO_HEIGHT_DIALOG, Qt.SmoothTransformation)

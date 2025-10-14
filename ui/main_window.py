@@ -30,7 +30,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "6.4.1"
+__version__ = "6.4.2"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-14"
 __developer__ = "Marco De Luca"
@@ -39,15 +39,51 @@ __developer__ = "Marco De Luca"
 class BRTSpedizioniApp(QMainWindow):
     """Main application for BRT shipping management"""
 
+    @staticmethod
+    def get_resource_path() -> Path:
+        """
+        Get the path to bundled resources (read-only).
+        Works both in development and when packaged with PyInstaller.
+
+        Returns:
+            Path to the resources directory
+        """
+        if getattr(sys, 'frozen', False):
+            # Running in PyInstaller bundle - resources are in _MEIPASS
+            return Path(sys._MEIPASS)
+        else:
+            # Running in development
+            return Path(__file__).parent.parent
+
+    @staticmethod
+    def get_data_path() -> Path:
+        """
+        Get the path for writable data files (settings, save files).
+        Works both in development and when packaged with PyInstaller.
+
+        Returns:
+            Path to the data directory
+        """
+        if getattr(sys, 'frozen', False):
+            # Running in PyInstaller bundle - use executable directory for data
+            return Path(sys.executable).parent
+        else:
+            # Running in development
+            return Path(__file__).parent.parent
+
     def __init__(self) -> None:
         super().__init__()
+
+        # Get paths for resources (read-only) and data (writable)
+        self.resource_path = self.get_resource_path()
+        self.data_path = self.get_data_path()
 
         # Variables
         self.df_spedizioni: Optional[pd.DataFrame] = None
         self.current_index: int = 0
-        # Save JSON in the same folder as the application
-        self.save_file: Path = Path(__file__).parent.parent / "brt_spedizioni_data.json"
-        settings_file: Path = Path(__file__).parent.parent / "brt_settings.json"
+        # Save JSON in the data folder (writable)
+        self.save_file: Path = self.data_path / "brt_spedizioni_data.json"
+        settings_file: Path = self.data_path / "brt_settings.json"
 
         # Initialize settings manager
         self.settings_manager = SettingsManager(settings_file)
@@ -58,8 +94,8 @@ class BRTSpedizioniApp(QMainWindow):
         # Initialize navigation handler
         self.navigation_handler = NavigationHandler(self)
 
-        # Initialize UI builder
-        self.ui_builder = UIBuilder(Path(__file__).parent.parent)
+        # Initialize UI builder (use resource_path for bundled assets)
+        self.ui_builder = UIBuilder(self.resource_path)
 
         # Default settings
         self.default_colli: int = 1
@@ -102,7 +138,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.setGeometry(100, 100, 900, 800)
 
         # Set application icon (IGEA logo)
-        icon_path = Path(__file__).parent.parent / FileSettings.LOGO_IGEA
+        icon_path = self.resource_path / FileSettings.LOGO_IGEA
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
@@ -259,7 +295,7 @@ class BRTSpedizioniApp(QMainWindow):
 
     def show_about_dialog(self) -> None:
         """Show the about dialog"""
-        dialog = AboutDialog(self, __app_name__, __version__, __release_date__, __developer__)
+        dialog = AboutDialog(self, __app_name__, __version__, __release_date__, __developer__, self.resource_path)
         dialog.exec_()
 
     def save_settings_and_return(self) -> None:
@@ -348,7 +384,7 @@ class BRTSpedizioniApp(QMainWindow):
         later_btn = msg.addButton(Messages.BTN_REMIND_LATER, QMessageBox.RejectRole)
 
         # Set custom icon
-        igea_icon_path = Path(__file__).parent.parent / FileSettings.LOGO_IGEA
+        igea_icon_path = self.resource_path / FileSettings.LOGO_IGEA
         if igea_icon_path.exists():
             msg.setWindowIcon(QIcon(str(igea_icon_path)))
 
