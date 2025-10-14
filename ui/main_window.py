@@ -30,7 +30,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "6.2.2"
+__version__ = "6.3.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-14"
 __developer__ = "Marco De Luca"
@@ -1066,7 +1066,10 @@ rm -f "$0"
         fields_valid = True
 
         # Determine if save is allowed
-        if is_last:
+        # In COMPLETED filter, save button should always be disabled
+        if self.current_filter == FilterType.COMPLETED:
+            can_save = False
+        elif is_last:
             # At last record in filter
             if self.current_filter == FilterType.ALL and is_last_in_dataframe:
                 # Special case: filter TUTTI at absolute last record
@@ -1084,8 +1087,16 @@ rm -f "$0"
         prev_enabled = not is_first
         next_enabled = not is_last
 
-        # Skip button: disabled when SKIPPED filter is active
-        skip_enabled = not is_last and self.current_filter != FilterType.SKIPPED
+        # Skip button behavior depends on active filter:
+        # - In COMPLETED filter: enable skip button to allow changing completed records to skipped
+        # - In SKIPPED filter: disable skip button (records are already skipped)
+        # - In other filters: enable if not at last record
+        if self.current_filter == FilterType.COMPLETED:
+            skip_enabled = True  # Allow skipping completed records
+        elif self.current_filter == FilterType.SKIPPED:
+            skip_enabled = False  # Already skipped
+        else:
+            skip_enabled = not is_last
 
         return {
             # Button enable/disable states
@@ -1113,8 +1124,15 @@ rm -f "$0"
         # Next button
         self.next_btn.setEnabled(state['next_enabled'])
 
-        # Skip button
+        # Skip button - update text and style based on active filter
         self.skip_btn.setEnabled(state['skip_enabled'])
+        self.skip_btn.setText(Messages.BTN_SKIP)
+
+        # Apply style based on enabled/disabled state
+        if state['skip_enabled']:
+            self.skip_btn.setStyleSheet(self._get_button_style('danger'))
+        else:
+            self.skip_btn.setStyleSheet(self._get_button_style('disabled'))
 
         # Save/Next button
         if state['all_completed']:
@@ -1185,10 +1203,12 @@ rm -f "$0"
         # Save to file
         self.save_data_to_file()
 
-        # Navigate to next record (skip-mode aware)
-        self.current_index = self.navigation_handler.handle_save_and_next_unified(
-            self.df_spedizioni, self.current_index
-        )
+        # Navigate to next record matching the current filter
+        next_index = self._find_next_matching_record(self.current_filter, self.current_index)
+
+        if next_index is not None:
+            self.current_index = next_index
+        # else: stay on current record (we're at the last matching record)
 
         # Update display
         self.show_current_record()
@@ -1270,10 +1290,13 @@ rm -f "$0"
         # Save
         self.save_data_to_file()
 
-        # Go to next
-        self.current_index = self.navigation_handler.go_to_next_with_skip(
-            self.df_spedizioni, self.current_index
-        )
+        # Navigate to next record matching the current filter
+        next_index = self._find_next_matching_record(self.current_filter, self.current_index)
+
+        if next_index is not None:
+            self.current_index = next_index
+        # else: stay on current record (we're at the last matching record)
+
         self.show_current_record()
 
     def previous_item(self) -> None:
