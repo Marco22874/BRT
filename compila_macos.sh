@@ -10,23 +10,26 @@ echo ""
 # Vai alla directory del progetto
 cd /Users/marco/Documents/BRT
 
-# Genera icona .icns da PNG (se non esiste)
-if [ ! -f "igea_icon.icns" ]; then
+# Genera icona .icns da PNG (se non esiste già in assets/)
+if [ ! -f "assets/igea_icon.icns" ]; then
     echo "Creazione icona .icns da PNG..."
     mkdir -p igea_icon.iconset
-    sips -z 16 16     igea_logo.png --out igea_icon.iconset/icon_16x16.png
-    sips -z 32 32     igea_logo.png --out igea_icon.iconset/icon_16x16@2x.png
-    sips -z 32 32     igea_logo.png --out igea_icon.iconset/icon_32x32.png
-    sips -z 64 64     igea_logo.png --out igea_icon.iconset/icon_32x32@2x.png
-    sips -z 128 128   igea_logo.png --out igea_icon.iconset/icon_128x128.png
-    sips -z 256 256   igea_logo.png --out igea_icon.iconset/icon_128x128@2x.png
-    sips -z 256 256   igea_logo.png --out igea_icon.iconset/icon_256x256.png
-    sips -z 512 512   igea_logo.png --out igea_icon.iconset/icon_256x256@2x.png
-    sips -z 512 512   igea_logo.png --out igea_icon.iconset/icon_512x512.png
-    cp igea_logo.png igea_icon.iconset/icon_512x512@2x.png
+    sips -z 16 16     assets/igea_logo.png --out igea_icon.iconset/icon_16x16.png
+    sips -z 32 32     assets/igea_logo.png --out igea_icon.iconset/icon_16x16@2x.png
+    sips -z 32 32     assets/igea_logo.png --out igea_icon.iconset/icon_32x32.png
+    sips -z 64 64     assets/igea_logo.png --out igea_icon.iconset/icon_32x32@2x.png
+    sips -z 128 128   assets/igea_logo.png --out igea_icon.iconset/icon_128x128.png
+    sips -z 256 256   assets/igea_logo.png --out igea_icon.iconset/icon_128x128@2x.png
+    sips -z 256 256   assets/igea_logo.png --out igea_icon.iconset/icon_256x256.png
+    sips -z 512 512   assets/igea_logo.png --out igea_icon.iconset/icon_256x256@2x.png
+    sips -z 512 512   assets/igea_logo.png --out igea_icon.iconset/icon_512x512.png
+    cp assets/igea_logo.png igea_icon.iconset/icon_512x512@2x.png
     iconutil -c icns igea_icon.iconset
+    mv igea_icon.icns assets/
     rm -rf igea_icon.iconset
-    echo "✓ Icona creata"
+    echo "✓ Icona creata in assets/igea_icon.icns"
+else
+    echo "✓ Icona già presente in assets/igea_icon.icns"
 fi
 
 # Rimuovi build precedente se esiste
@@ -35,19 +38,12 @@ if [ -d "dist/Gestione_Spedizioni_BRT.app" ]; then
     rm -rf dist/Gestione_Spedizioni_BRT.app
 fi
 
-# Esegui PyInstaller
+# Esegui PyInstaller usando il file .spec configurato
 echo "Avvio compilazione con PyInstaller..."
-/Users/marco/Library/Python/3.9/bin/pyinstaller \
-    --onedir \
-    --windowed \
-    --name "Gestione_Spedizioni_BRT" \
-    --icon=igea_icon.icns \
-    --add-data "igea_logo.png:." \
-    --add-data "Logo_BRT.svg.png:." \
-    --exclude-module pytest \
-    --exclude-module _pytest \
-    brt_app_pyqt5.py \
-    --noconfirm
+echo "Uso il file Gestione_Spedizioni_BRT.spec configurato"
+echo "Questo file include automaticamente la cartella assets/ con tutti i file necessari"
+echo ""
+/Users/marco/Library/Python/3.9/bin/pyinstaller --clean --noconfirm Gestione_Spedizioni_BRT.spec
 
 echo ""
 if [ -d "dist/Gestione_Spedizioni_BRT.app" ]; then
