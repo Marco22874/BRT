@@ -30,7 +30,7 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "6.3.0"
+__version__ = "6.4.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2025-10-14"
 __developer__ = "Marco De Luca"
@@ -686,6 +686,7 @@ rm -f "$0"
         """
         # Base style for all buttons
         base_style = "border: none; border-radius: 4px;"
+        base_style_with_border = "border: 1px solid #cccccc; border-radius: 4px;"
 
         # Pill badge styles for filter buttons
         pill_active = """
@@ -718,7 +719,7 @@ rm -f "$0"
             'disabled': f"background-color: {Colors.DISABLED}; color: {Colors.DISABLED_TEXT}; {base_style} padding: {UIConstants.BUTTON_PADDING_NORMAL};",
             'disabled_export': f"background-color: {Colors.DISABLED}; color: {Colors.DISABLED_TEXT}; {base_style} padding: {UIConstants.BUTTON_PADDING_EXTRA};",
             'success': f"background-color: {Colors.SUCCESS}; color: {Colors.TEXT_WHITE}; font-weight: bold; {base_style} padding: {UIConstants.BUTTON_PADDING_LARGE};",
-            'plain': f"{base_style} padding: {UIConstants.BUTTON_PADDING_NORMAL};",
+            'plain': f"background-color: #f8f8f8; color: {Colors.TEXT_BLACK}; {base_style_with_border} padding: {UIConstants.BUTTON_PADDING_NORMAL};",
             'pill_active': pill_active,
             'pill_inactive': pill_inactive
         }

@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Dict, Any, Callable
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QLineEdit, QTextEdit, QProgressBar,
-                             QGroupBox, QGridLayout, QAction, QSpinBox, QDoubleSpinBox)
+                             QGroupBox, QGridLayout, QAction, QSpinBox, QDoubleSpinBox,
+                             QSizePolicy)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap
 
@@ -123,17 +124,35 @@ class UIBuilder:
         left_column.addWidget(dest_title)
 
         dest_group = QGroupBox()
+        dest_group.setStyleSheet("""
+            QGroupBox {
+                background-color: #f9f9f9;
+                border: 1px solid #cccccc;
+                border-radius: 8px;
+                margin-top: 0px;
+                padding: 10px;
+            }
+        """)
         dest_layout = QVBoxLayout()
 
         dest_text = QTextEdit()
         dest_text.setReadOnly(True)
         dest_text.setFixedHeight(200)  # Increased height for better visibility
-        dest_text.setStyleSheet("background-color: #f0f0f0; color: #000000;")
+        dest_text.setStyleSheet("""
+            background-color: transparent;
+            color: #000000;
+            border: none;
+            padding: 5px;
+        """)
         font = QFont(get_monospace_font(), 10)
         dest_text.setFont(font)
         dest_layout.addWidget(dest_text)
 
         dest_group.setLayout(dest_layout)
+
+        # Set size policy to allow vertical expansion
+        dest_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+
         left_column.addWidget(dest_group)
 
         return left_column, dest_text
@@ -165,7 +184,81 @@ class UIBuilder:
         right_column.addWidget(sped_title)
 
         sped_group = QGroupBox()
+        sped_group.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #cccccc;
+                border-radius: 8px;
+                margin-top: 0px;
+                padding: 10px;
+            }
+        """)
         sped_layout = QGridLayout()
+
+        # Style for SpinBox and DoubleSpinBox
+        # Create nice looking spinboxes with styled buttons and arrows
+        spinbox_style = """
+            QSpinBox, QDoubleSpinBox {
+                border: 1px solid #cccccc;
+                border-radius: 4px;
+                padding: 4px 2px 4px 6px;
+                background-color: white;
+                color: #000000;
+                min-height: 20px;
+            }
+            QSpinBox::up-button, QDoubleSpinBox::up-button {
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: 16px;
+                border-left: 1px solid #cccccc;
+                border-top-right-radius: 3px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f8f8f8, stop:0.5 #f0f0f0, stop:1 #e8e8e8);
+            }
+            QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #e8e8e8, stop:0.5 #e0e0e0, stop:1 #d8d8d8);
+            }
+            QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed {
+                background: #d0d0d0;
+            }
+            QSpinBox::down-button, QDoubleSpinBox::down-button {
+                subcontrol-origin: border;
+                subcontrol-position: bottom right;
+                width: 16px;
+                border-left: 1px solid #cccccc;
+                border-bottom-right-radius: 3px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f8f8f8, stop:0.5 #f0f0f0, stop:1 #e8e8e8);
+            }
+            QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #e8e8e8, stop:0.5 #e0e0e0, stop:1 #d8d8d8);
+            }
+            QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {
+                background: #d0d0d0;
+            }
+            QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+                width: 10px;
+                height: 6px;
+            }
+            QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+                width: 10px;
+                height: 6px;
+            }
+        """
+
+        # Get path to arrow SVG files in assets folder
+        arrow_up_path = str(self.app_root / "assets" / "arrow_up.svg").replace('\\', '/')
+        arrow_down_path = str(self.app_root / "assets" / "arrow_down.svg").replace('\\', '/')
+
+        # Add arrow images to the style
+        spinbox_style_with_arrows = spinbox_style.replace(
+            "QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {",
+            f"QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{\n                image: url({arrow_up_path});"
+        ).replace(
+            "QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {",
+            f"QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{\n                image: url({arrow_down_path});"
+        )
 
         # Row 0: Number of packages (SpinBox for integer with arrows)
         sped_layout.addWidget(QLabel(Messages.LABEL_NUM_PACKAGES), 0, 0)
@@ -175,6 +268,8 @@ class UIBuilder:
         colli_input.setValue(default_colli)
         colli_input.setMaximumWidth(80)  # Reduced width for smaller arrows
         colli_input.setMinimumHeight(28)  # Match height with arrows
+        colli_input.setStyleSheet(spinbox_style_with_arrows)
+        colli_input.setButtonSymbols(QSpinBox.UpDownArrows)  # Force show arrows
         sped_layout.addWidget(colli_input, 0, 1)
 
         # Row 1: Weight (DoubleSpinBox for decimal with arrows)
@@ -187,50 +282,78 @@ class UIBuilder:
         peso_input.setValue(default_peso)
         peso_input.setMaximumWidth(80)  # Reduced width for smaller arrows
         peso_input.setMinimumHeight(28)  # Match height with arrows
+        peso_input.setStyleSheet(spinbox_style_with_arrows)
+        peso_input.setButtonSymbols(QDoubleSpinBox.UpDownArrows)  # Force show arrows
         sped_layout.addWidget(peso_input, 1, 1)
 
         # Row 2, Column 0: Quick templates label
         template_label = QLabel(Messages.LABEL_QUICK_TEMPLATES)
         sped_layout.addWidget(template_label, 2, 0, Qt.AlignTop)
 
+        # Style for template buttons (consistent across platforms)
+        template_btn_style = """
+            QPushButton {
+                background-color: #e0e0e0;
+                border: 1px solid #cccccc;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+                border-color: #999999;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+            }
+        """
+
         # Row 2-5, Columns 1-2: Template buttons directly in main grid (4 rows x 2 columns)
         btn1 = QPushButton(Messages.BTN_TEMPLATE_1)
         btn1.setFixedWidth(120)
+        btn1.setStyleSheet(template_btn_style)
         btn1.clicked.connect(lambda: template_callback(1, 1.5))
         sped_layout.addWidget(btn1, 2, 1)
 
         btn2 = QPushButton(Messages.BTN_TEMPLATE_2)
         btn2.setFixedWidth(120)
+        btn2.setStyleSheet(template_btn_style)
         btn2.clicked.connect(lambda: template_callback(1, 2))
         sped_layout.addWidget(btn2, 2, 2)
 
         btn3 = QPushButton(Messages.BTN_TEMPLATE_3)
         btn3.setFixedWidth(120)
+        btn3.setStyleSheet(template_btn_style)
         btn3.clicked.connect(lambda: template_callback(1, 2.5))
         sped_layout.addWidget(btn3, 3, 1)
 
         btn4 = QPushButton(Messages.BTN_TEMPLATE_4)
         btn4.setFixedWidth(120)
+        btn4.setStyleSheet(template_btn_style)
         btn4.clicked.connect(lambda: template_callback(1, 3))
         sped_layout.addWidget(btn4, 3, 2)
 
         btn5 = QPushButton(Messages.BTN_TEMPLATE_5)
         btn5.setFixedWidth(120)
+        btn5.setStyleSheet(template_btn_style)
         btn5.clicked.connect(lambda: template_callback(1, 3.5))
         sped_layout.addWidget(btn5, 4, 1)
 
         btn6 = QPushButton(Messages.BTN_TEMPLATE_6)
         btn6.setFixedWidth(120)
+        btn6.setStyleSheet(template_btn_style)
         btn6.clicked.connect(lambda: template_callback(1, 4))
         sped_layout.addWidget(btn6, 4, 2)
 
         btn7 = QPushButton(Messages.BTN_TEMPLATE_7)
         btn7.setFixedWidth(120)
+        btn7.setStyleSheet(template_btn_style)
         btn7.clicked.connect(lambda: template_callback(1, 4.5))
         sped_layout.addWidget(btn7, 5, 1)
 
         btn8 = QPushButton(Messages.BTN_TEMPLATE_8)
         btn8.setFixedWidth(120)
+        btn8.setStyleSheet(template_btn_style)
         btn8.clicked.connect(lambda: template_callback(1, 5))
         sped_layout.addWidget(btn8, 5, 2)
 
@@ -245,6 +368,10 @@ class UIBuilder:
 
         sped_group.setLayout(sped_layout)
         sped_group.setMinimumHeight(230)  # Match height with dest_group (200px text + margins)
+
+        # Set size policy to match the left column height
+        sped_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+
         right_column.addWidget(sped_group)
 
         return right_column, colli_input, peso_input
@@ -407,6 +534,14 @@ class UIBuilder:
         main_layout.addWidget(step2_title)
 
         step2_group = QGroupBox()
+        step2_group.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #cccccc;
+                border-radius: 8px;
+                margin-top: 0px;
+                padding: 10px;
+            }
+        """)
         step2_layout = QVBoxLayout()
 
         # 2-column layout for recipient and shipment data
@@ -435,7 +570,22 @@ class UIBuilder:
         )
         step2_layout.addLayout(filter_layout)
 
+        # Progress bar with explicit minimum width to match parent
         progress_bar = QProgressBar()
+        progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        progress_bar.setTextVisible(True)
+        progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #cccccc;
+                border-radius: 4px;
+                text-align: center;
+                min-width: 100%;
+            }
+            QProgressBar::chunk {
+                background-color: #28a745;
+                border-radius: 3px;
+            }
+        """)
         step2_layout.addWidget(progress_bar)
 
         # Navigation buttons
@@ -484,6 +634,14 @@ class UIBuilder:
         main_layout.addWidget(step3_title)
 
         step3_group = QGroupBox()
+        step3_group.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #cccccc;
+                border-radius: 8px;
+                margin-top: 0px;
+                padding: 10px;
+            }
+        """)
         step3_layout = QHBoxLayout()
         step3_layout.setContentsMargins(10, 8, 10, 8)
 
@@ -595,6 +753,20 @@ class UIBuilder:
         description.setWordWrap(True)
         layout.addWidget(description)
 
+        # Style for all input fields in settings
+        input_style = """
+            QLineEdit {
+                border: 1px solid #cccccc;
+                border-radius: 4px;
+                padding: 6px 8px;
+                background-color: white;
+                color: #000000;
+            }
+            QLineEdit:focus {
+                border-color: #16FEBC;
+            }
+        """
+
         # Group box for default values
         defaults_group = QGroupBox(Messages.SETTINGS_GROUP_DEFAULTS)
         defaults_group.setStyleSheet("font-size: 14px; font-weight: bold;")
@@ -605,12 +777,14 @@ class UIBuilder:
         defaults_layout.addWidget(QLabel(Messages.LABEL_DEFAULT_PACKAGES), 0, 0)
         settings_colli_input = QLineEdit(str(default_colli))
         settings_colli_input.setMaximumWidth(150)
+        settings_colli_input.setStyleSheet(input_style)
         defaults_layout.addWidget(settings_colli_input, 0, 1)
 
         # Default weight
         defaults_layout.addWidget(QLabel(Messages.LABEL_DEFAULT_WEIGHT), 1, 0)
         settings_peso_input = QLineEdit(str(default_peso))
         settings_peso_input.setMaximumWidth(150)
+        settings_peso_input.setStyleSheet(input_style)
         defaults_layout.addWidget(settings_peso_input, 1, 1)
 
         defaults_group.setLayout(defaults_layout)
@@ -626,12 +800,14 @@ class UIBuilder:
         brt_layout.addWidget(QLabel(Messages.LABEL_CUSTOMER_CODE), 0, 0)
         settings_customer_code_input = QLineEdit(brt_config['brt_customer_code'])
         settings_customer_code_input.setMaximumWidth(300)
+        settings_customer_code_input.setStyleSheet(input_style)
         brt_layout.addWidget(settings_customer_code_input, 0, 1)
 
         # Alphabetic reference
         brt_layout.addWidget(QLabel(Messages.LABEL_ALPHABETIC_REF), 1, 0)
         settings_alphabetic_ref_input = QLineEdit(brt_config['brt_alphabetic_ref'])
         settings_alphabetic_ref_input.setMaximumWidth(300)
+        settings_alphabetic_ref_input.setStyleSheet(input_style)
         brt_layout.addWidget(settings_alphabetic_ref_input, 1, 1)
 
         # Goods type (max 15 characters)
@@ -639,18 +815,21 @@ class UIBuilder:
         settings_goods_type_input = QLineEdit(brt_config['brt_goods_type'])
         settings_goods_type_input.setMaximumWidth(300)
         settings_goods_type_input.setMaxLength(15)  # BRT limit: 15 characters
+        settings_goods_type_input.setStyleSheet(input_style)
         brt_layout.addWidget(settings_goods_type_input, 2, 1)
 
         # Tariff code
         brt_layout.addWidget(QLabel(Messages.LABEL_TARIFF_CODE), 3, 0)
         settings_tariff_code_input = QLineEdit(brt_config['brt_tariff_code'])
         settings_tariff_code_input.setMaximumWidth(300)
+        settings_tariff_code_input.setStyleSheet(input_style)
         brt_layout.addWidget(settings_tariff_code_input, 3, 1)
 
         # Service type
         brt_layout.addWidget(QLabel(Messages.LABEL_SERVICE_TYPE), 4, 0)
         settings_service_type_input = QLineEdit(brt_config['brt_service_type'])
         settings_service_type_input.setMaximumWidth(300)
+        settings_service_type_input.setStyleSheet(input_style)
         brt_layout.addWidget(settings_service_type_input, 4, 1)
 
         # Note (max 35 characters)
@@ -658,6 +837,7 @@ class UIBuilder:
         settings_note_input = QLineEdit(brt_config['brt_note'])
         settings_note_input.setMaximumWidth(300)
         settings_note_input.setMaxLength(35)  # BRT limit: 35 characters
+        settings_note_input.setStyleSheet(input_style)
         brt_layout.addWidget(settings_note_input, 5, 1)
 
         brt_group.setLayout(brt_layout)
