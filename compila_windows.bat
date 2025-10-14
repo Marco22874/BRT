@@ -33,11 +33,16 @@ if %errorlevel% neq 0 (
 )
 echo.
 
-REM Converte PNG in ICO per l'icona Windows
-echo [3/5] Creazione icona Windows...
-python -c "from PIL import Image; img = Image.open('igea_logo.png'); img.save('igea_logo.ico', format='ICO', sizes=[(256,256)])"
-if %errorlevel% neq 0 (
-    echo [AVVISO] Impossibile creare l'icona .ico, compilazione senza icona
+REM Converte PNG in ICO per l'icona Windows (se non esiste già)
+echo [3/5] Verifica icona Windows...
+if not exist "assets\igea_icon.ico" (
+    echo Creazione icona Windows da PNG...
+    python -c "from PIL import Image; img = Image.open('assets/igea_logo.png').convert('RGB'); img.save('assets/igea_icon.ico', format='ICO', sizes=[(256,256)])"
+    if %errorlevel% neq 0 (
+        echo [AVVISO] Impossibile creare l'icona .ico, compilazione senza icona
+    )
+) else (
+    echo Icona Windows già presente in assets\igea_icon.ico
 )
 echo.
 
@@ -45,42 +50,17 @@ REM Pulisci compilazioni precedenti
 echo [4/6] Pulizia compilazioni precedenti...
 if exist "build" rmdir /s /q build
 if exist "dist" rmdir /s /q dist
-if exist "Gestione_Spedizioni_BRT.spec" del /q Gestione_Spedizioni_BRT.spec
+echo NOTA: Mantengo il file .spec configurato (non lo cancello)
 echo.
 
-REM Compilazione con PyInstaller
+REM Compilazione con PyInstaller usando il file .spec configurato
 echo [5/6] Compilazione applicazione in eseguibile Windows...
 echo.
+echo Uso il file Gestione_Spedizioni_BRT.spec configurato
+echo Questo file include automaticamente la cartella assets/ con tutti i file necessari
+echo.
 
-REM Verifica se l'icona .ico esiste
-if exist "igea_logo.ico" (
-    echo Compilazione con icona igea_logo.ico
-    pyinstaller --clean ^
-        --onedir ^
-        --windowed ^
-        --name "Gestione_Spedizioni_BRT" ^
-        --icon=igea_logo.ico ^
-        --add-data "igea_logo.png;." ^
-        --add-data "Logo_BRT.svg.png;." ^
-        --hidden-import=PyQt5.sip ^
-        --collect-all PyQt5 ^
-        --exclude-module pytest ^
-        --exclude-module _pytest ^
-        brt_app_pyqt5.py
-) else (
-    echo Compilazione senza icona
-    pyinstaller --clean ^
-        --onedir ^
-        --windowed ^
-        --name "Gestione_Spedizioni_BRT" ^
-        --add-data "igea_logo.png;." ^
-        --add-data "Logo_BRT.svg.png;." ^
-        --hidden-import=PyQt5.sip ^
-        --collect-all PyQt5 ^
-        --exclude-module pytest ^
-        --exclude-module _pytest ^
-        brt_app_pyqt5.py
-)
+pyinstaller --clean Gestione_Spedizioni_BRT.spec
 
 if %errorlevel% neq 0 (
     echo [ERRORE] Errore durante la compilazione
