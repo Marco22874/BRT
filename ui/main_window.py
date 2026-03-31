@@ -30,9 +30,9 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "6.4.3"
+__version__ = "6.5.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
-__release_date__ = "2025-10-14"
+__release_date__ = "2026-03-31"
 __developer__ = "Marco De Luca"
 
 
@@ -108,6 +108,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.brt_tariff_code: str = BRTDefaults.DEFAULT_TARIFF_CODE
         self.brt_service_type: str = BRTDefaults.DEFAULT_SERVICE_TYPE
         self.brt_note: str = BRTDefaults.DEFAULT_NOTE
+        self.brt_note_extra: str = BRTDefaults.DEFAULT_NOTE_EXTRA
 
         # Cache for DataFrame counts (to avoid repeated calculations)
         self._cache_total: int = 0
@@ -185,6 +186,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.settings_tariff_code_input = settings_inputs['settings_tariff_code_input']
         self.settings_service_type_input = settings_inputs['settings_service_type_input']
         self.settings_note_input = settings_inputs['settings_note_input']
+        self.settings_note_extra_input = settings_inputs['settings_note_extra_input']
 
         # Add screens to stack
         self.stacked_widget.addWidget(self.main_screen)
@@ -231,7 +233,8 @@ class BRTSpedizioniApp(QMainWindow):
             'brt_goods_type': self.brt_goods_type,
             'brt_tariff_code': self.brt_tariff_code,
             'brt_service_type': self.brt_service_type,
-            'brt_note': self.brt_note
+            'brt_note': self.brt_note,
+            'brt_note_extra': self.brt_note_extra
         }
 
         callbacks = {
@@ -286,6 +289,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.settings_tariff_code_input.setText(self.brt_tariff_code)
         self.settings_service_type_input.setText(self.brt_service_type)
         self.settings_note_input.setText(self.brt_note)
+        self.settings_note_extra_input.setText(self.brt_note_extra)
 
         self.stacked_widget.setCurrentWidget(self.settings_screen)
 
@@ -321,6 +325,7 @@ class BRTSpedizioniApp(QMainWindow):
             self.brt_tariff_code = self.settings_tariff_code_input.text().strip()
             self.brt_service_type = self.settings_service_type_input.text().strip()
             self.brt_note = self.settings_note_input.text().strip()
+            self.brt_note_extra = self.settings_note_extra_input.text().strip()
 
             # Save to file using SettingsManager
             settings_data = {
@@ -331,7 +336,8 @@ class BRTSpedizioniApp(QMainWindow):
                 'brt_goods_type': self.brt_goods_type,
                 'brt_tariff_code': self.brt_tariff_code,
                 'brt_service_type': self.brt_service_type,
-                'brt_note': self.brt_note
+                'brt_note': self.brt_note,
+                'brt_note_extra': self.brt_note_extra
             }
 
             self.settings_manager.save(settings_data)
@@ -359,7 +365,8 @@ class BRTSpedizioniApp(QMainWindow):
         self.brt_goods_type = settings['brt_goods_type']
         self.brt_tariff_code = settings['brt_tariff_code']
         self.brt_service_type = settings['brt_service_type']
-        self.brt_note = settings.get('brt_note', BRTDefaults.DEFAULT_NOTE)  # Use default if not present
+        self.brt_note = settings.get('brt_note', BRTDefaults.DEFAULT_NOTE)
+        self.brt_note_extra = settings.get('brt_note_extra', BRTDefaults.DEFAULT_NOTE_EXTRA)
 
     def check_for_updates(self) -> None:
         """Start update check in background"""
@@ -636,7 +643,8 @@ rm -f "$0"
             'brt_alphabetic_ref': self.brt_alphabetic_ref,
             'brt_tariff_code': self.brt_tariff_code,
             'brt_service_type': self.brt_service_type,
-            'brt_note': self.brt_note
+            'brt_note': self.brt_note,
+            'brt_note_extra': self.brt_note_extra
         }
 
         # Use CSV handler to load file

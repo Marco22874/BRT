@@ -123,6 +123,7 @@ class CsvHandler:
             df_unique[CSVColumns.OUTPUT_NAZIONE_DEST] = BRTDefaults.DEFAULT_COUNTRY_DEST
             df_unique[CSVColumns.OUTPUT_TIPO_SERVIZIO] = brt_config['brt_service_type']
             df_unique[CSVColumns.OUTPUT_NOTE] = brt_config['brt_note']
+            df_unique[CSVColumns.OUTPUT_NOTE_EXTRA] = brt_config['brt_note_extra']
 
             # Delete saved JSON (new file = new session)
             if self.save_file.exists():

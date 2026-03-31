@@ -36,7 +36,9 @@ class SettingsManager:
             'brt_alphabetic_ref': BRTDefaults.DEFAULT_ALPHABETIC_REF,
             'brt_goods_type': BRTDefaults.DEFAULT_GOODS_TYPE,
             'brt_tariff_code': BRTDefaults.DEFAULT_TARIFF_CODE,
-            'brt_service_type': BRTDefaults.DEFAULT_SERVICE_TYPE
+            'brt_service_type': BRTDefaults.DEFAULT_SERVICE_TYPE,
+            'brt_note': BRTDefaults.DEFAULT_NOTE,
+            'brt_note_extra': BRTDefaults.DEFAULT_NOTE_EXTRA
         }
 
         if not self.settings_file.exists():

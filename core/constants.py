@@ -115,6 +115,7 @@ class BRTDefaults:
     DEFAULT_TARIFF_CODE = '100'
     DEFAULT_SERVICE_TYPE = 'C'  # Express service
     DEFAULT_NOTE = 'Chiamare prima della consegna'
+    DEFAULT_NOTE_EXTRA = 'Consegna tassativa entro 3/5 gg.'
 
     # Fixed values for Italy
     DEFAULT_ABBUONO = ''  # Empty for Italy
@@ -166,6 +167,7 @@ class CSVColumns:
     OUTPUT_NAZIONE_DEST = "VABNZD"
     OUTPUT_TIPO_SERVIZIO = "VABTSP"
     OUTPUT_NOTE = "VABNOT"
+    OUTPUT_NOTE_EXTRA = "VABNT2"
 
     @classmethod
     def get_required_input_columns(cls) -> List[str]:
@@ -237,7 +239,8 @@ class CSVColumns:
             cls.OUTPUT_RIF_ALFABETICO,
             cls.OUTPUT_TELEFONO_REF,
             cls.OUTPUT_CELLULARE,
-            cls.OUTPUT_NOTE
+            cls.OUTPUT_NOTE,
+            cls.OUTPUT_NOTE_EXTRA
         ]
 
 
@@ -347,6 +350,7 @@ class Messages:
     LABEL_TARIFF_CODE = "Codice Tariffa:"
     LABEL_SERVICE_TYPE = "Tipo Servizio:"
     LABEL_NOTE = "Note:"
+    LABEL_NOTE_EXTRA = "Note Aggiuntive:"
 
     # Settings Screen
     SETTINGS_TITLE = "IMPOSTAZIONI"

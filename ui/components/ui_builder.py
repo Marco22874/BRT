@@ -840,6 +840,14 @@ class UIBuilder:
         settings_note_input.setStyleSheet(input_style)
         brt_layout.addWidget(settings_note_input, 5, 1)
 
+        # Note Aggiuntive (max 35 characters)
+        brt_layout.addWidget(QLabel(Messages.LABEL_NOTE_EXTRA), 6, 0)
+        settings_note_extra_input = QLineEdit(brt_config['brt_note_extra'])
+        settings_note_extra_input.setMaximumWidth(300)
+        settings_note_extra_input.setMaxLength(35)  # BRT limit: 35 characters
+        settings_note_extra_input.setStyleSheet(input_style)
+        brt_layout.addWidget(settings_note_extra_input, 6, 1)
+
         brt_group.setLayout(brt_layout)
         layout.addWidget(brt_group)
 
@@ -874,7 +882,8 @@ class UIBuilder:
             'settings_goods_type_input': settings_goods_type_input,
             'settings_tariff_code_input': settings_tariff_code_input,
             'settings_service_type_input': settings_service_type_input,
-            'settings_note_input': settings_note_input
+            'settings_note_input': settings_note_input,
+            'settings_note_extra_input': settings_note_extra_input
         }
 
         return settings_widget, inputs
