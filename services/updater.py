@@ -3,6 +3,7 @@ Update management module for BRT Shipping Management Application
 Contains classes for checking and downloading application updates
 """
 
+import sys
 import platform
 import json
 import urllib.request
@@ -13,6 +14,25 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 from core.constants import NetworkSettings
 from core.utils import logger
+
+
+def _load_github_token() -> str:
+    """Load GitHub token from file for private repo access."""
+    try:
+        # When packaged with PyInstaller, look in the bundled resources
+        if getattr(sys, 'frozen', False):
+            token_path = Path(sys._MEIPASS) / 'github_token.txt'
+        else:
+            token_path = Path(__file__).parent.parent / 'github_token.txt'
+
+        if token_path.exists():
+            return token_path.read_text(encoding='utf-8').strip()
+    except Exception as e:
+        logger.debug(f"Could not load GitHub token: {e}")
+    return ''
+
+
+GITHUB_TOKEN = _load_github_token()
 
 
 class UpdateDownloader(QThread):
@@ -58,6 +78,8 @@ class UpdateDownloader(QThread):
             # Download with progress
             req = urllib.request.Request(self.download_url)
             req.add_header('User-Agent', NetworkSettings.USER_AGENT)
+            req.add_header('Authorization', f'token {GITHUB_TOKEN}')
+            req.add_header('Accept', 'application/octet-stream')
 
             with urllib.request.urlopen(req, timeout=NetworkSettings.TIMEOUT_MEDIUM) as response:
                 total_size = int(response.headers.get('Content-Length', 0))
@@ -119,6 +141,7 @@ class UpdateChecker(QThread):
             url = f"https://api.github.com/repos/{self.github_repo}/releases/latest"
             req = urllib.request.Request(url)
             req.add_header('User-Agent', NetworkSettings.USER_AGENT)
+            req.add_header('Authorization', f'token {GITHUB_TOKEN}')
 
             with urllib.request.urlopen(req, timeout=NetworkSettings.TIMEOUT_SHORT) as response:
                 data = json.loads(response.read().decode())

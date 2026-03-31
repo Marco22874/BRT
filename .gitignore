@@ -35,6 +35,9 @@ igea_icon.icns
 INIZIO_QUI.txt
 arrows.png
 
+# GitHub token for auto-update
+github_token.txt
+
 # Update scripts (generated at runtime)
 update_brt.bat
 update_brt.sh
