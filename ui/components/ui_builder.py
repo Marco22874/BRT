@@ -8,11 +8,11 @@ from typing import Dict, Any, Callable
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QLineEdit, QTextEdit, QProgressBar,
                              QGroupBox, QGridLayout, QAction, QSpinBox, QDoubleSpinBox,
-                             QSizePolicy)
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QPixmap
+                             QSizePolicy, QComboBox)
+from PyQt5.QtCore import Qt, QLocale
+from PyQt5.QtGui import QFont, QPixmap, QDoubleValidator
 
-from core.constants import UIConstants, FileSettings, Messages, FilterType
+from core.constants import UIConstants, FileSettings, Messages, FilterType, BRTDefaults
 from core.utils import get_monospace_font
 from .drag_drop_widget import DragDropWidget
 
@@ -164,7 +164,7 @@ class UIBuilder:
         peso_focus_callback: Callable[[], None],
         save_and_next_callback: Callable[[], None],
         template_callback: Callable[[int, float], None]
-    ) -> tuple[QVBoxLayout, QSpinBox, QDoubleSpinBox]:
+    ) -> tuple[QVBoxLayout, QSpinBox, QDoubleSpinBox, QComboBox]:
         """Create the right column with shipment data inputs.
 
         Args:
@@ -175,7 +175,7 @@ class UIBuilder:
             template_callback: Callback for template buttons
 
         Returns:
-            Tuple of (layout, colli_input, peso_input)
+            Tuple of (layout, colli_input, peso_input, volume_input)
         """
         right_column = QVBoxLayout()
 
@@ -260,31 +260,95 @@ class UIBuilder:
             f"QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{\n                image: url({arrow_down_path});"
         )
 
-        # Row 0: Number of packages (SpinBox for integer with arrows)
-        sped_layout.addWidget(QLabel(Messages.LABEL_NUM_PACKAGES), 0, 0)
+        # Row 0: Colli + Peso side by side via HBoxLayout
         colli_input = QSpinBox()
         colli_input.setMinimum(1)
         colli_input.setMaximum(999)
         colli_input.setValue(default_colli)
-        colli_input.setMaximumWidth(80)  # Reduced width for smaller arrows
-        colli_input.setMinimumHeight(28)  # Match height with arrows
+        colli_input.setMaximumWidth(80)
+        colli_input.setMinimumHeight(28)
         colli_input.setStyleSheet(spinbox_style_with_arrows)
-        colli_input.setButtonSymbols(QSpinBox.UpDownArrows)  # Force show arrows
-        sped_layout.addWidget(colli_input, 0, 1)
+        colli_input.setButtonSymbols(QSpinBox.UpDownArrows)
 
-        # Row 1: Weight (DoubleSpinBox for decimal with arrows)
-        sped_layout.addWidget(QLabel(Messages.LABEL_TOTAL_WEIGHT), 1, 0)
         peso_input = QDoubleSpinBox()
         peso_input.setMinimum(0.1)
         peso_input.setMaximum(9999.9)
         peso_input.setDecimals(1)
-        peso_input.setSingleStep(0.1)  # 100 grams increment (0.1 kg)
+        peso_input.setSingleStep(0.1)
         peso_input.setValue(default_peso)
-        peso_input.setMaximumWidth(80)  # Reduced width for smaller arrows
-        peso_input.setMinimumHeight(28)  # Match height with arrows
+        peso_input.setMaximumWidth(80)
+        peso_input.setMinimumHeight(28)
         peso_input.setStyleSheet(spinbox_style_with_arrows)
-        peso_input.setButtonSymbols(QDoubleSpinBox.UpDownArrows)  # Force show arrows
-        sped_layout.addWidget(peso_input, 1, 1)
+        peso_input.setButtonSymbols(QDoubleSpinBox.UpDownArrows)
+
+        colli_peso_row = QHBoxLayout()
+        colli_peso_row.setContentsMargins(0, 0, 0, 0)
+        colli_peso_row.addWidget(QLabel(Messages.LABEL_NUM_PACKAGES))
+        colli_peso_row.addWidget(colli_input)
+        colli_peso_row.addSpacing(20)
+        colli_peso_row.addWidget(QLabel(Messages.LABEL_TOTAL_WEIGHT))
+        colli_peso_row.addWidget(peso_input)
+        colli_peso_row.addStretch()
+        sped_layout.addLayout(colli_peso_row, 0, 0, 1, 3)
+
+        # Row 1: Volume (editable ComboBox with presets + custom value) - wider to show "0,0495 (Grande)"
+        sped_layout.addWidget(QLabel(Messages.LABEL_VOLUME), 1, 0)
+        volume_input = QComboBox()
+        volume_input.setEditable(True)
+        volume_input.addItem("", userData=None)  # empty placeholder
+        volume_input.addItem("0,007 (Piccolo)", userData=BRTDefaults.VOLUME_PICCOLO)
+        volume_input.addItem("0,022 (Medio)", userData=BRTDefaults.VOLUME_MEDIO)
+        volume_input.addItem("0,0495 (Grande)", userData=BRTDefaults.VOLUME_GRANDE)
+        volume_input.setCurrentIndex(0)
+        # Validator accepts both '.' and ',' as decimal separator
+        volume_validator = QDoubleValidator(0.0, 9999.9999, 4)
+        volume_validator.setNotation(QDoubleValidator.StandardNotation)
+        volume_validator.setLocale(QLocale(QLocale.Italian, QLocale.Italy))
+        volume_input.lineEdit().setValidator(volume_validator)
+        volume_input.setMinimumWidth(180)
+        volume_input.setMaximumWidth(220)
+        volume_input.setMinimumHeight(28)
+        combobox_style = """
+            QComboBox {
+                border: 1px solid #cccccc;
+                border-radius: 4px;
+                padding: 4px 2px 4px 6px;
+                background-color: white;
+                color: #000000;
+                min-height: 20px;
+            }
+            QComboBox:editable {
+                background-color: white;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: 16px;
+                border-left: 1px solid #cccccc;
+                border-top-right-radius: 3px;
+                border-bottom-right-radius: 3px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f8f8f8, stop:0.5 #f0f0f0, stop:1 #e8e8e8);
+            }
+            QComboBox::drop-down:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #e8e8e8, stop:0.5 #e0e0e0, stop:1 #d8d8d8);
+            }
+            QComboBox::down-arrow {
+                width: 10px;
+                height: 6px;
+                image: url(__ARROW_DOWN__);
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #000000;
+                selection-background-color: #16FEBC;
+                selection-color: #000000;
+                border: 1px solid #cccccc;
+            }
+        """.replace("__ARROW_DOWN__", arrow_down_path)
+        volume_input.setStyleSheet(combobox_style)
+        sped_layout.addWidget(volume_input, 1, 1, 1, 2)
 
         # Row 2, Column 0: Quick templates label
         template_label = QLabel(Messages.LABEL_QUICK_TEMPLATES)
@@ -367,14 +431,14 @@ class UIBuilder:
         sped_layout.setVerticalSpacing(10)
 
         sped_group.setLayout(sped_layout)
-        sped_group.setMinimumHeight(230)  # Match height with dest_group (200px text + margins)
+        sped_group.setMinimumHeight(260)  # Slightly taller to fit the Volume row
 
         # Set size policy to match the left column height
         sped_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
         right_column.addWidget(sped_group)
 
-        return right_column, colli_input, peso_input
+        return right_column, colli_input, peso_input, volume_input
 
     def create_navigation_buttons(
         self,
@@ -547,7 +611,7 @@ class UIBuilder:
         # 2-column layout for recipient and shipment data
         columns_layout = QHBoxLayout()
         left_col, dest_text = self.create_recipient_column()
-        right_col, colli_input, peso_input = self.create_shipment_column(
+        right_col, colli_input, peso_input, volume_input = self.create_shipment_column(
             default_colli, default_peso,
             callbacks['peso_focus'], callbacks['save_and_next'], callbacks['template']
         )
@@ -607,6 +671,7 @@ class UIBuilder:
             'dest_text': dest_text,
             'colli_input': colli_input,
             'peso_input': peso_input,
+            'volume_input': volume_input,
             'progress_label': progress_label,
             'progress_bar': progress_bar,
             **filter_buttons,

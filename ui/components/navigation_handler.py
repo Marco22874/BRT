@@ -27,18 +27,21 @@ class NavigationHandler:
         df_spedizioni: pd.DataFrame,
         current_index: int,
         colli: int,
-        peso: float
+        peso: float,
+        volume: float
     ) -> None:
-        """Save colli and peso data to current record.
+        """Save colli, peso and volume data to current record.
 
         Args:
             df_spedizioni: DataFrame with shipment data
             current_index: Current record index
             colli: Number of packages
             peso: Weight in kg
+            volume: Volume in m³
         """
         df_spedizioni.loc[df_spedizioni.index[current_index], 'VABNCL'] = str(colli)
         df_spedizioni.loc[df_spedizioni.index[current_index], 'VABPKB'] = f"{peso:.1f}"
+        df_spedizioni.loc[df_spedizioni.index[current_index], 'VABVLB'] = f"{volume:.4f}"
 
     def skip_current_record(
         self,
@@ -53,6 +56,7 @@ class NavigationHandler:
         """
         df_spedizioni.loc[df_spedizioni.index[current_index], 'VABNCL'] = 'SKIP'
         df_spedizioni.loc[df_spedizioni.index[current_index], 'VABPKB'] = 'SKIP'
+        df_spedizioni.loc[df_spedizioni.index[current_index], 'VABVLB'] = 'SKIP'
 
     def go_to_previous(
         self,

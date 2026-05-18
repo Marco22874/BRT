@@ -121,6 +121,11 @@ class BRTDefaults:
     DEFAULT_ABBUONO = ''  # Empty for Italy
     DEFAULT_COUNTRY_DEST = ''  # Empty for Italy
 
+    # Volume presets (m³)
+    VOLUME_PICCOLO = 0.007
+    VOLUME_MEDIO = 0.022
+    VOLUME_GRANDE = 0.0495
+
 
 class NetworkSettings:
     """Constants for network settings"""
@@ -157,6 +162,7 @@ class CSVColumns:
     OUTPUT_CELLULARE = "VABCEL"
     OUTPUT_NUM_COLLI = "VABNCL"
     OUTPUT_PESO_KG = "VABPKB"
+    OUTPUT_VOLUME = "VABVLB"
 
     # Fixed BRT Columns
     OUTPUT_ABBUONO_TB = "VABATB"
@@ -235,6 +241,7 @@ class CSVColumns:
             cls.OUTPUT_NATURA_SPEDIZIONE,
             cls.OUTPUT_NUM_COLLI,
             cls.OUTPUT_PESO_KG,
+            cls.OUTPUT_VOLUME,
             cls.OUTPUT_RIF_MITTENTE,
             cls.OUTPUT_RIF_ALFABETICO,
             cls.OUTPUT_TELEFONO_REF,
@@ -258,11 +265,13 @@ class Messages:
     TITLE_DOWNLOAD_ERROR = "Errore Download"
 
     # Validation Messages
-    MSG_EMPTY_FIELDS = "Compilare tutti i campi (colli e peso)"
+    MSG_EMPTY_FIELDS = "Compilare tutti i campi (colli, peso e volume)"
     MSG_POSITIVE_VALUES = "Colli e peso devono essere maggiori di zero"
     MSG_INVALID_VALUES = "Valori non validi per colli o peso"
     MSG_INVALID_SETTINGS = "Valori non validi. Inserire numeri validi."
     MSG_SETTINGS_POSITIVE = "I valori devono essere maggiori di zero"
+    MSG_EMPTY_VOLUME = "Seleziona o inserisci un valore di Volume"
+    MSG_INVALID_VOLUME = "Volume non valido. Inserire un numero maggiore di zero."
 
     # File Operations
     MSG_LOAD_CSV_FIRST = "Carica prima un file CSV"
@@ -341,6 +350,7 @@ class Messages:
     LABEL_SHIPMENT_DATA = "Dati Spedizione (da compilare)"
     LABEL_NUM_PACKAGES = "N. Colli:"
     LABEL_TOTAL_WEIGHT = "Peso tot (kg):"
+    LABEL_VOLUME = "Volume (m³):"
     LABEL_QUICK_TEMPLATES = "Template rapidi:"
     LABEL_DEFAULT_PACKAGES = "N. Colli di default:"
     LABEL_DEFAULT_WEIGHT = "Peso di default (kg):"
