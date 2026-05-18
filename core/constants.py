@@ -241,13 +241,13 @@ class CSVColumns:
             cls.OUTPUT_NATURA_SPEDIZIONE,
             cls.OUTPUT_NUM_COLLI,
             cls.OUTPUT_PESO_KG,
-            cls.OUTPUT_VOLUME,
             cls.OUTPUT_RIF_MITTENTE,
             cls.OUTPUT_RIF_ALFABETICO,
             cls.OUTPUT_TELEFONO_REF,
             cls.OUTPUT_CELLULARE,
             cls.OUTPUT_NOTE,
-            cls.OUTPUT_NOTE_EXTRA
+            cls.OUTPUT_NOTE_EXTRA,
+            cls.OUTPUT_VOLUME
         ]
 
 
