@@ -4,7 +4,7 @@ BRT Shipping Management Application - PyQt5
 Converts the LISTADDT.csv file to the format required by BRT
 """
 
-__version__ = "6.6.0"
+__version__ = "6.6.1"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
 __release_date__ = "2026-05-18"
 __developer__ = "Marco De Luca"
