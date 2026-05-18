@@ -30,9 +30,9 @@ from .components.ui_builder import UIBuilder
 
 
 # Application metadata (imported from main module)
-__version__ = "6.5.0"
+__version__ = "6.6.0"
 __app_name__ = "Gestione Spedizioni IGEA <-> BRT"
-__release_date__ = "2026-03-31"
+__release_date__ = "2026-05-18"
 __developer__ = "Marco De Luca"
 
 
@@ -161,6 +161,7 @@ class BRTSpedizioniApp(QMainWindow):
         self.dest_text = main_widgets['dest_text']
         self.colli_input = main_widgets['colli_input']
         self.peso_input = main_widgets['peso_input']
+        self.volume_input = main_widgets['volume_input']
         self.progress_label = main_widgets['progress_label']
         self.progress_bar = main_widgets['progress_bar']
         self.filter_all_btn = main_widgets['filter_all_btn']
@@ -669,17 +670,45 @@ rm -f "$0"
             # Show first record
             self.show_current_record()
 
-    def _validate_shipment_data(self) -> Optional[Tuple[int, float]]:
-        """Validate colli and peso input fields.
+    def _validate_shipment_data(self) -> Optional[Tuple[int, float, float]]:
+        """Validate colli, peso and volume input fields.
 
         Returns:
-            Optional[Tuple[int, float]]: (colli, peso) if valid, None if invalid
+            Optional[Tuple[int, float, float]]: (colli, peso, volume) if valid, None if invalid
         """
-        # Get values directly from SpinBox widgets (no validation needed, always valid)
+        # Colli and peso come from SpinBox widgets (always valid)
         colli_int = self.colli_input.value()
         peso_float = self.peso_input.value()
 
-        return (colli_int, peso_float)
+        # Volume: if the current text matches a preset's display label, use its userData.
+        # Otherwise parse the (potentially custom) text directly.
+        current_text = self.volume_input.currentText().strip()
+        if not current_text:
+            QMessageBox.warning(self, Messages.TITLE_WARNING, Messages.MSG_EMPTY_VOLUME)
+            return None
+
+        preset_value: Optional[float] = None
+        for i in range(self.volume_input.count()):
+            if self.volume_input.itemText(i) == current_text:
+                data = self.volume_input.itemData(i)
+                if data is not None:
+                    preset_value = float(data)
+                break
+
+        if preset_value is not None:
+            volume_float = preset_value
+        else:
+            try:
+                volume_float = float(current_text.replace(',', '.'))
+            except ValueError:
+                QMessageBox.warning(self, Messages.TITLE_WARNING, Messages.MSG_INVALID_VOLUME)
+                return None
+
+        if volume_float <= 0:
+            QMessageBox.warning(self, Messages.TITLE_WARNING, Messages.MSG_INVALID_VOLUME)
+            return None
+
+        return (colli_int, peso_float, volume_float)
 
     def _invalidate_cache(self) -> None:
         """Mark the cache as dirty to force recalculation on next access."""
@@ -793,10 +822,13 @@ rm -f "$0"
         if (record[CSVColumns.OUTPUT_NUM_COLLI] and  # type: ignore
             record[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.EMPTY.value and  # type: ignore
             record[CSVColumns.OUTPUT_NUM_COLLI] != RecordStatus.SKIP.value):  # type: ignore
+            volume_display = record.get(CSVColumns.OUTPUT_VOLUME, '') if hasattr(record, 'get') else ''
+            volume_line = f"Volume: {volume_display} m³<br>" if volume_display and volume_display != RecordStatus.SKIP.value else ""
             dest_info += (
                 f"<br>"
                 f"Colli: {record[CSVColumns.OUTPUT_NUM_COLLI]}<br>"
-                f"Peso: {record[CSVColumns.OUTPUT_PESO_KG]} kg"
+                f"Peso: {record[CSVColumns.OUTPUT_PESO_KG]} kg<br>"
+                f"{volume_line}"
                 f"<div style='background-color: {Colors.SUCCESS}; color: white; padding: 5px; margin-top: 5px; font-size: 12pt; font-weight: bold;'>"
                 f"✓ COMPLETATO"
                 f"</div>"
@@ -830,6 +862,35 @@ rm -f "$0"
             self.peso_input.setValue(float(record[CSVColumns.OUTPUT_PESO_KG]))
         else:
             self.peso_input.setValue(self.default_peso)
+
+        # Volume: reuse preset item if value matches one of the presets, else show raw value
+        volume_value = record.get(CSVColumns.OUTPUT_VOLUME, '') if hasattr(record, 'get') else ''
+        if (volume_value and  # type: ignore
+            volume_value != RecordStatus.EMPTY.value and  # type: ignore
+            volume_value != RecordStatus.SKIP.value):  # type: ignore
+            try:
+                vol_float = float(volume_value)
+            except (TypeError, ValueError):
+                vol_float = None
+
+            matched_index = -1
+            if vol_float is not None:
+                for i in range(self.volume_input.count()):
+                    data = self.volume_input.itemData(i)
+                    if data is not None and abs(float(data) - vol_float) < 1e-9:
+                        matched_index = i
+                        break
+
+            if matched_index >= 0:
+                self.volume_input.setCurrentIndex(matched_index)
+            else:
+                # Custom value: show with Italian decimal separator
+                display = str(volume_value).replace('.', ',')
+                self.volume_input.setCurrentIndex(0)
+                self.volume_input.setEditText(display)
+        else:
+            self.volume_input.setCurrentIndex(0)
+            self.volume_input.setEditText("")
 
     def _update_progress_display(self) -> None:
         """Update progress bar and summary labels based on cached data."""
@@ -1235,11 +1296,11 @@ rm -f "$0"
         if validated_data is None:
             return
 
-        colli_int, peso_float = validated_data
+        colli_int, peso_float, volume_float = validated_data
 
         # Save data in current record using navigation handler
         self.navigation_handler.save_record_data(
-            self.df_spedizioni, self.current_index, colli_int, peso_float
+            self.df_spedizioni, self.current_index, colli_int, peso_float, volume_float
         )
 
         # Invalidate cache since DataFrame changed
@@ -1276,11 +1337,11 @@ rm -f "$0"
         if validated_data is None:
             return
 
-        colli_int, peso_float = validated_data
+        colli_int, peso_float, volume_float = validated_data
 
         # Save data in current record using navigation handler
         self.navigation_handler.save_record_data(
-            self.df_spedizioni, self.current_index, colli_int, peso_float
+            self.df_spedizioni, self.current_index, colli_int, peso_float, volume_float
         )
 
         # Invalidate cache since DataFrame changed
@@ -1304,11 +1365,11 @@ rm -f "$0"
         if validated_data is None:
             return
 
-        colli_int, peso_float = validated_data
+        colli_int, peso_float, volume_float = validated_data
 
         # Save data in current record using navigation handler
         self.navigation_handler.save_record_data(
-            self.df_spedizioni, self.current_index, colli_int, peso_float
+            self.df_spedizioni, self.current_index, colli_int, peso_float, volume_float
         )
 
         # Invalidate cache since DataFrame changed

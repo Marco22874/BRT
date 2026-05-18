@@ -1,0 +1,108 @@
+name: Build Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag/version to release (es: v6.6.0). Se vuoto, usa il commit SHA come nome.'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            REF_NAME="${GITHUB_REF#refs/tags/}"
+            echo "tag=${REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.inputs.tag }}" ]; then
+            INPUT_TAG="${{ github.event.inputs.tag }}"
+            echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+            echo "version=${INPUT_TAG#v}" >> "$GITHUB_OUTPUT"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            SHORT_SHA="${GITHUB_SHA:0:7}"
+            echo "tag=dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "version=dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt5 requests pandas pyinstaller Pillow
+
+      - name: Create github_token.txt (for auto-update)
+        shell: bash
+        env:
+          BRT_RELEASE_TOKEN: ${{ secrets.BRT_RELEASE_TOKEN }}
+        run: |
+          if [ -n "$BRT_RELEASE_TOKEN" ]; then
+            printf '%s' "$BRT_RELEASE_TOKEN" > github_token.txt
+            echo "Token written (${#BRT_RELEASE_TOKEN} chars)"
+          else
+            echo "" > github_token.txt
+            echo "::warning::Secret BRT_RELEASE_TOKEN non impostato. L'auto-update non potra' accedere a release di repo private."
+          fi
+
+      - name: Generate Windows icon (ICO)
+        run: |
+          python -c "from PIL import Image; img = Image.open('assets/igea_logo.png').convert('RGBA'); img.save('assets/igea_icon.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
+      - name: Build with PyInstaller
+        run: pyinstaller --clean --noconfirm Gestione_Spedizioni_BRT.spec
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          if [ ! -f "dist/Gestione_Spedizioni_BRT/Gestione_Spedizioni_BRT.exe" ]; then
+            echo "::error::Build failed: exe non trovato in dist/Gestione_Spedizioni_BRT/"
+            exit 1
+          fi
+          ls -la dist/Gestione_Spedizioni_BRT/ | head -20
+
+      - name: Package as ZIP
+        shell: pwsh
+        run: |
+          $zipName = "Gestione_Spedizioni_BRT_windows_${{ steps.version.outputs.version }}.zip"
+          Compress-Archive -Path "dist/Gestione_Spedizioni_BRT/*" -DestinationPath $zipName -CompressionLevel Optimal
+          Write-Host "Created: $zipName"
+          Get-Item $zipName | Format-List Name, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gestione_Spedizioni_BRT_windows_${{ steps.version.outputs.version }}
+          path: Gestione_Spedizioni_BRT_windows_${{ steps.version.outputs.version }}.zip
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.is_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: Gestione_Spedizioni_BRT_windows_${{ steps.version.outputs.version }}.zip

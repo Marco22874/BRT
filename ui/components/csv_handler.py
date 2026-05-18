@@ -113,6 +113,7 @@ class CsvHandler:
             # Add columns for data to be filled
             df_unique[CSVColumns.OUTPUT_NUM_COLLI] = RecordStatus.EMPTY.value
             df_unique[CSVColumns.OUTPUT_PESO_KG] = RecordStatus.EMPTY.value
+            df_unique[CSVColumns.OUTPUT_VOLUME] = RecordStatus.EMPTY.value
 
             # Add fixed fields (use configurable values)
             df_unique[CSVColumns.OUTPUT_ABBUONO_TB] = BRTDefaults.DEFAULT_ABBUONO
@@ -268,7 +269,7 @@ class CsvHandler:
 
         try:
             # Save ONLY completed records (with non-empty VABNCL)
-            df_to_save = df_spedizioni[df_spedizioni['VABNCL'] != ''][['VABNSP', 'VABNCL', 'VABPKB']]
+            df_to_save = df_spedizioni[df_spedizioni['VABNCL'] != ''][['VABNSP', 'VABNCL', 'VABPKB', 'VABVLB']]
 
             data = {
                 'last_modified': datetime.now().isoformat(),
@@ -301,6 +302,8 @@ class CsvHandler:
                     idx = df_spedizioni[mask].index[0]
                     df_spedizioni.at[idx, 'VABNCL'] = item['VABNCL']
                     df_spedizioni.at[idx, 'VABPKB'] = item['VABPKB']
+                    # VABVLB may be missing in older save files
+                    df_spedizioni.at[idx, 'VABVLB'] = item.get('VABVLB', '')
 
         except Exception as e:
             logger.error(f"Failed to load saved data from {self.save_file}: {e}", exc_info=True)
